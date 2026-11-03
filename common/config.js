@@ -6,6 +6,6 @@
  * ROOM   ：講座ごとの部屋の名前。毎回の講座で変えると、前回の答えとまざらない（英数字のみ）。
  */
 window.KOZA_CONFIG = {
-  API_URL: "",
+  API_URL: "https://script.google.com/macros/s/AKfycbyvzMST3zsAF1WLU-2-FRXg3uabYo1JX15fidjFIccWCu-DqKeG2LMOHwYeL8I2_ha6/exec",
   ROOM: "koza2027"
 };
