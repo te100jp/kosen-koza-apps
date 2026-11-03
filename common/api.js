@@ -108,7 +108,8 @@
     setStatus: setStatus
   };
   window.KozaAPI = API;
-  document.addEventListener("DOMContentLoaded", function () { setStatus(API_URL ? "online" : "local", API_URL ? "接続を確かめています" : null); if (API_URL) API.ping().catch(function () {}); });
+  // 集計を使わないページ（config.js を読みこまないページ）では、右下の表示を出さない
+  document.addEventListener("DOMContentLoaded", function () { if (!window.KOZA_CONFIG && !qs.get("api")) return; setStatus(API_URL ? "online" : "local", API_URL ? "接続を確かめています" : null); if (API_URL) API.ping().catch(function () {}); });
 })();
 
 /* QRコードを canvas に描く（qrcode.js が読みこまれているとき） */

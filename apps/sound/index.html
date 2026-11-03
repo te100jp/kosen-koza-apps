@@ -137,8 +137,8 @@
     var g = cv.getContext("2d"), W = cv.width, H = cv.height; g.clearRect(0, 0, W, H);
     g.strokeStyle = "#D5D0E3"; g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke();
     g.strokeStyle = "#2E9BD6"; g.lineWidth = 3; g.beginPath();
-    var step = Math.max(1, Math.floor(b.length / W / 0.6));
-    for (var x = 0; x < W; x++) { var v = b[Math.min(b.length - 1, x * step)] || 0, y = H / 2 - v * H * 1.6; if (x) g.lineTo(x, y); else g.moveTo(x, y); }
+    var span = b.length * 0.6;   // 集めた音の6割を、横いっぱいに描く
+    for (var x = 0; x < W; x++) { var v = b[Math.floor(x * span / W)] || 0, y = H / 2 - v * H * 1.6; if (x) g.lineTo(x, y); else g.moveTo(x, y); }
     g.stroke();
   }
   $("freeze").onclick = function () { frozen = !frozen; this.textContent = frozen ? "波を動かす" : "波を止める"; };

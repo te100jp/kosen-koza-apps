@@ -54,7 +54,7 @@ input[type=range] { width: 100%; accent-color: var(--pur); }
 .warn { background: var(--coral-t); border-radius: 10px; padding: 10px 12px; }
 .bar { height: 30px; background: var(--pur-t); border-radius: 8px; overflow: hidden; position: relative; }
 .bar > i { display: block; height: 100%; background: var(--sky); transition: width .4s; }
-.bar > b { position: absolute; left: 10px; top: 4px; font-size: 15px; }
+.bar > b { position: absolute; left: 10px; right: 6.8em; top: 4px; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar > span { position: absolute; right: 10px; top: 4px; font-size: 15px; font-weight: 700; }
 .status { position: fixed; right: 10px; bottom: 10px; font-size: 12px; padding: 4px 10px; border-radius: 99px; background: #fff; border: 1px solid var(--rule); color: var(--sub); z-index: 20; }
 .status.online::before { content: "● "; color: var(--mint); }
@@ -69,6 +69,6 @@ footer.app a { color: var(--sub); }
 /* 先生の画面（スクリーンに映す） */
 body.screen { font-size: 20px; }
 body.screen header.app h1 { font-size: 24px; }
-body.screen .bar { height: 54px; } body.screen .bar > b, body.screen .bar > span { font-size: 26px; top: 10px; }
+body.screen .bar { height: 54px; } body.screen .bar > b, body.screen .bar > span { font-size: 24px; top: 11px; }
 body.screen .note, body.screen .ok, body.screen .warn { font-size: 20px; }
 body.screen .muted { font-size: 15px; }
