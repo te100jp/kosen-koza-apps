@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>投票アプリ</title>
+<link rel="stylesheet" href="../../common/style.css">
+<style>
+  .q { font-size: 20px; font-weight: 700; margin: 4px 0 12px; }
+  .pics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .pics.one { grid-template-columns: 1fr; }
+  .pic { position: relative; background: #eee; border-radius: 12px; overflow: hidden; aspect-ratio: 4/3; }
+  .pic img { width: 100%; height: 100%; object-fit: cover; display: block; position: relative; z-index: 1; }
+  .pics.one .pic { aspect-ratio: 1 / 1; max-width: 380px; margin: 0 auto; }
+  .pic .lab { z-index: 2; position: absolute; left: 8px; top: 8px; background: var(--pur); color: #fff; font-weight: 700; border-radius: 99px; padding: 2px 12px; font-size: 18px; }
+  .pic .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--sub); font-size: 14px; text-align: center; padding: 8px; }
+  .cap { font-size: 13px; color: var(--sub); margin-top: 4px; }
+  .texts { display: grid; gap: 8px; margin-bottom: 12px; }
+  .texts div { background: var(--pur-t); border-radius: 10px; padding: 10px 12px; }
+  .choices { display: grid; gap: 10px; }
+  .choices.two { grid-template-columns: 1fr 1fr; }
+  .choices button { min-height: 72px; font-size: 22px; }
+  .wait { text-align: center; padding: 40px 10px; color: var(--sub); }
+  .big-mark { font-size: 54px; }
+</style>
+</head>
+<body>
+<header class="app"><h1>投票アプリ</h1><span class="tag" id="setname"></span></header>
+<main>
+  <div id="wait" class="card wait">
+    <div class="big-mark">⏳</div>
+    <p>先生が問題を出すまで、少し待ってね。</p>
+    <p class="muted">名前や学校名は送りません。選んだ答えだけを送ります。</p>
+  </div>
+  <div id="qbox" class="card hidden">
+    <div class="q" id="qtext"></div>
+    <div id="pics" class="pics"></div>
+    <div id="texts" class="texts"></div>
+    <div id="choices" class="choices"></div>
+    <p id="sent" class="ok hidden"></p>
+    <p id="reveal" class="note hidden"></p>
+  </div>
+  <p class="muted">2人で相談してOK。答えは何回でも変えられます（最後に選んだものが答えになります）。</p>
+</main>
+<footer class="app">愛知県立高等専門学校 公開講座「使う人から作る人へ」</footer>
+<script src="../../common/config.js"></script>
+<script src="../../common/api.js"></script>
+<script src="questions.js"></script>
+<script>
+(function () {
+  var qs = new URLSearchParams(location.search);
+  var SETID = qs.get("set") || "koza2";
+  var SET = (window.VOTE_SETS || {})[SETID];
+  var $ = function (id) { return document.getElementById(id); };
+  if (!SET) { $("wait").innerHTML = "<p>問題が見つかりません（set=" + esc(SETID) + "）</p>"; return; }
+  $("setname").textContent = SET.title;
+  var COLORS = ["sky", "coral", "mint", "amb", "ghost"];
+  var current = null, mine = {};
+  try { mine = JSON.parse(localStorage.getItem("vote_mine_" + SETID) || "{}"); } catch (e) {}
+
+  function findQ(id) { for (var i = 0; i < SET.questions.length; i++) if (SET.questions[i].id === id) return SET.questions[i]; return null; }
+
+  function picHTML(src, label, cap) {
+    return '<div><div class="pic"><div class="ph">写真' + esc(label) + '<br>（先生が用意した写真が入ります）</div>' +
+      '<img src="' + esc(src) + '" alt="写真' + esc(label) + '" onerror="this.remove()">' +
+      (label ? '<span class="lab">' + esc(label) + '</span>' : '') + '</div>' + (cap ? '<div class="cap">' + esc(cap) + '</div>' : '') + '</div>';
+  }
+
+  function render(state) {
+    var q = state && findQ(state.q);
+    if (!q) { $("wait").classList.remove("hidden"); $("qbox").classList.add("hidden"); current = null; return; }
+    $("wait").classList.add("hidden"); $("qbox").classList.remove("hidden");
+    var tag = q.id + "_" + (state.round || 0);
+    if (!current || current.tag !== tag) {
+      current = { id: q.id, tag: tag, q: q };
+      $("qtext").textContent = q.text;
+      var imgs = q.images || [];
+      $("pics").className = "pics" + (imgs.length === 1 ? " one" : "");
+      $("pics").innerHTML = imgs.map(function (src, i) { return picHTML(src, imgs.length > 1 ? q.choices[i] : "", (q.images && q.texts) ? q.texts[i] : ""); }).join("");
+      $("texts").innerHTML = (!q.images && q.texts) ? q.texts.map(function (t, i) { return "<div><b>" + esc(q.choices[i]) + "</b>：" + esc(t) + "</div>"; }).join("") : "";
+      $("choices").className = "choices" + (q.choices.length === 2 ? " two" : "");
+      $("choices").innerHTML = q.choices.map(function (c, i) { return '<button class="' + COLORS[i % COLORS.length] + '" data-c="' + esc(c) + '">' + esc(c) + "</button>"; }).join("");
+      Array.prototype.forEach.call($("choices").querySelectorAll("button"), function (b) {
+        b.onclick = function () { vote(b.getAttribute("data-c")); };
+      });
+      showMine();
+    }
+    if (state.reveal) {
+      $("reveal").classList.remove("hidden");
+      $("reveal").innerHTML = (q.answer ? "正解は <b>" + esc(q.answer) + "</b>！" : "答えは、先生の話を聞こう。") + (q.hint ? "<br>" + esc(q.hint) : "");
+    } else $("reveal").classList.add("hidden");
+  }
+
+  function showMine() {
+    var m = current && mine[current.tag];
+    Array.prototype.forEach.call($("choices").querySelectorAll("button"), function (b) { b.classList.toggle("sel", b.getAttribute("data-c") === m); });
+    if (m) { $("sent").classList.remove("hidden"); $("sent").textContent = "送りました：「" + m + "」（変えるときは、もう一度えらぶ）"; }
+    else $("sent").classList.add("hidden");
+  }
+
+  function vote(c) {
+    if (!current) return;
+    var tag = current.tag;
+    mine[tag] = c; try { localStorage.setItem("vote_mine_" + SETID, JSON.stringify(mine)); } catch (e) {}
+    showMine();
+    KozaAPI.put("v_" + SETID + "_" + tag, c).catch(function () {
+      $("sent").className = "warn"; $("sent").textContent = "送れませんでした。もう一度えらんでください。";
+    });
+  }
+
+  KozaAPI.poll("vstate_" + SETID, function (rows) {
+    var last = rows.length ? KozaAPI.parse(rows[rows.length - 1].value, null) : null;
+    render(last);
+  }, 2500);
+})();
+</script>
+</body>
+</html>

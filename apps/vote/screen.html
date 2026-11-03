@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>投票アプリ（先生の画面）</title>
+<link rel="stylesheet" href="../../common/style.css">
+<style>
+  .layout { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+  .q { font-size: 30px; font-weight: 800; margin: 0 0 12px; }
+  .pics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pics.one { grid-template-columns: 1fr; }
+  .pic { position: relative; background: #eee; border-radius: 12px; overflow: hidden; aspect-ratio: 4/3; }
+  .pic img { width: 100%; height: 100%; object-fit: cover; display: block; position: relative; z-index: 1; }
+  .pics.one .pic { aspect-ratio: 1 / 1; max-width: 460px; margin: 0 auto; }
+  .pic .lab { z-index: 2; position: absolute; left: 10px; top: 10px; background: var(--pur); color: #fff; font-weight: 800; border-radius: 99px; padding: 2px 16px; font-size: 26px; }
+  .pic .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--sub); font-size: 18px; text-align: center; padding: 10px; }
+  .cap { font-size: 16px; color: var(--sub); margin-top: 4px; }
+  .texts div { background: var(--pur-t); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; font-size: 22px; }
+  .bars { display: grid; gap: 12px; }
+  .bar.correct > i { background: var(--mint); }
+  .count { font-size: 22px; color: var(--sub); margin: 10px 0; }
+  .ctrl { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .ctrl button { font-size: 18px; }
+  .side { display: flex; gap: 14px; align-items: flex-start; }
+  #qlist { font-size: 16px; }
+  .manual input { width: 90px; font-size: 22px; text-align: center; }
+  .manual .row { margin-bottom: 6px; }
+</style>
+</head>
+<body class="screen">
+<header class="app"><h1>投票アプリ（先生の画面）</h1><span class="tag" id="setname"></span></header>
+<main class="wide">
+  <div class="layout">
+    <section class="card">
+      <div class="q" id="qtext">問題を選んでください</div>
+      <div id="pics" class="pics"></div>
+      <div id="texts" class="texts"></div>
+      <p id="hint" class="note hidden"></p>
+    </section>
+    <section class="card">
+      <div class="side">
+        <div class="grow">
+          <div class="count" id="count">答えた人：0</div>
+          <div class="bars" id="bars"></div>
+          <div id="manual" class="manual hidden"></div>
+        </div>
+        <div style="text-align:center">
+          <div class="qrbox"><canvas id="qr"></canvas></div>
+          <div class="muted">生徒はここから</div>
+        </div>
+      </div>
+      <div class="ctrl">
+        <button class="ghost" id="prev">◀ 前</button>
+        <button id="next">次 ▶</button>
+        <button class="mint" id="reveal">正解を見せる</button>
+        <button class="amb" id="again">この問題をやり直す</button>
+        <button class="ghost" id="hand">手で数を入れる</button>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <select id="qlist" class="grow"></select>
+      </div>
+      <p class="muted">「手で数を入れる」は、Wi-Fiが止まったときの手挙げ用です。</p>
+    </section>
+  </div>
+</main>
+<script src="../../common/config.js"></script>
+<script src="../../common/api.js"></script>
+<script src="../../common/qrcode.js"></script>
+<script src="questions.js"></script>
+<script>
+(function () {
+  var qs = new URLSearchParams(location.search);
+  var SETID = qs.get("set") || "koza2";
+  var SET = window.VOTE_SETS[SETID];
+  var $ = function (id) { return document.getElementById(id); };
+  $("setname").textContent = SET.title;
+  var Q = SET.questions, idx = -1, state = { q: null, reveal: false, round: 0 }, stopPoll = null, rounds = {}, manualOn = false, manual = {};
+
+  // 生徒用のURL（このページと同じ設定で index.html を開く）
+  var stu = new URL("index.html", location.href);
+  stu.searchParams.set("set", SETID);
+  ["room", "api"].forEach(function (k) { if (qs.get(k)) stu.searchParams.set(k, qs.get(k)); });
+  drawQR($("qr"), stu.href, 220);
+
+  Q.forEach(function (q, i) { var o = document.createElement("option"); o.value = i; o.textContent = (i + 1) + ". " + q.text; $("qlist").appendChild(o); });
+
+  function pic(src, label, cap) {
+    return '<div><div class="pic"><div class="ph">写真' + esc(label) + '<br>（img フォルダに写真を置くと表示）</div><img src="' + esc(src) + '" onerror="this.remove()">' +
+      (label ? '<span class="lab">' + esc(label) + "</span>" : "") + "</div>" + (cap ? '<div class="cap">' + esc(cap) + "</div>" : "") + "</div>";
+  }
+  function show(i) {
+    idx = Math.max(0, Math.min(Q.length - 1, i));
+    var q = Q[idx]; $("qlist").value = idx;
+    $("qtext").textContent = q.text;
+    var imgs = q.images || [];
+    $("pics").className = "pics" + (imgs.length === 1 ? " one" : "");
+    $("pics").innerHTML = imgs.map(function (s, k) { return pic(s, imgs.length > 1 ? q.choices[k] : "", q.texts ? q.texts[k] : ""); }).join("");
+    $("texts").innerHTML = (!q.images && q.texts) ? q.texts.map(function (t, k) { return "<div><b>" + esc(q.choices[k]) + "</b>：" + esc(t) + "</div>"; }).join("") : "";
+    $("hint").classList.add("hidden");
+    state = { q: q.id, reveal: false, round: rounds[q.id] || 0 };
+    KozaAPI.put("vstate_" + SETID, state);
+    manual = {}; drawBars({});
+    if (stopPoll) stopPoll();
+    stopPoll = KozaAPI.poll("v_" + SETID + "_" + q.id + "_" + state.round, function (rows) { if (!manualOn) drawBars(tally(rows)); }, 2000);
+    renderManual();
+  }
+  function tally(rows) {
+    var m = KozaAPI.byClient(rows), c = {};
+    Object.keys(m).forEach(function (k) { var v = m[k].value; c[v] = (c[v] || 0) + 1; });
+    return c;
+  }
+  function drawBars(c) {
+    var q = Q[idx]; if (!q) return;
+    var total = q.choices.reduce(function (s, ch) { return s + (c[ch] || 0); }, 0);
+    $("count").textContent = "答えた人：" + total;
+    $("bars").innerHTML = q.choices.map(function (ch) {
+      var n = c[ch] || 0, pct = total ? Math.round(n * 100 / total) : 0;
+      var ok = state.reveal && q.answer === ch;
+      return '<div class="bar' + (ok ? " correct" : "") + '"><i style="width:' + pct + '%"></i><b>' + esc(ch) + (ok ? " ✓ 正解" : "") + "</b><span>" + n + "人（" + pct + "%）</span></div>";
+    }).join("");
+  }
+  function renderManual() {
+    var q = Q[idx];
+    $("manual").innerHTML = q.choices.map(function (ch, k) {
+      return '<div class="row"><span class="grow">' + esc(ch) + '</span><input type="number" min="0" data-k="' + k + '" value="' + (manual[ch] || 0) + '"></div>';
+    }).join("");
+    Array.prototype.forEach.call($("manual").querySelectorAll("input"), function (inp) {
+      inp.oninput = function () { manual[q.choices[+inp.getAttribute("data-k")]] = Math.max(0, +inp.value || 0); drawBars(manual); };
+    });
+  }
+  $("prev").onclick = function () { show(idx - 1); };
+  $("next").onclick = function () { show(idx + 1); };
+  $("qlist").onchange = function () { show(+$("qlist").value); };
+  $("reveal").onclick = function () {
+    var q = Q[idx]; if (!q) return;
+    state.reveal = true; KozaAPI.put("vstate_" + SETID, state);
+    $("hint").classList.remove("hidden");
+    $("hint").innerHTML = (q.answer ? "正解は <b>" + esc(q.answer) + "</b>" : "この問題の正解は、先生から発表します") + (q.hint ? "<br>" + esc(q.hint) : "");
+    if (manualOn) drawBars(manual); else KozaAPI.list("v_" + SETID + "_" + q.id + "_" + state.round).then(function (r) { drawBars(tally(r)); });
+  };
+  $("again").onclick = function () { var q = Q[idx]; rounds[q.id] = (rounds[q.id] || 0) + 1; show(idx); };
+  $("hand").onclick = function () {
+    manualOn = !manualOn; $("manual").classList.toggle("hidden", !manualOn);
+    $("hand").textContent = manualOn ? "自動の集計にもどす" : "手で数を入れる";
+    if (manualOn) drawBars(manual);
+  };
+  document.addEventListener("keydown", function (e) { if (e.key === "ArrowRight") show(idx + 1); if (e.key === "ArrowLeft") show(idx - 1); });
+  // 前回の続きから始める
+  KozaAPI.latest("vstate_" + SETID).then(function (r) {
+    var st = r && KozaAPI.parse(r.value, null);
+    if (st && st.q) { for (var i = 0; i < Q.length; i++) if (Q[i].id === st.q) { rounds[st.q] = st.round || 0; show(i); return; } }
+    show(0);
+  }).catch(function () { show(0); });
+})();
+</script>
+</body>
+</html>

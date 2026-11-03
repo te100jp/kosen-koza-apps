@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>ピクセル顕微鏡</title>
+<link rel="stylesheet" href="../../common/style.css">
+<style>
+  #view { width: 100%; aspect-ratio: 1 / 1; background: #222; border-radius: 12px; touch-action: none; display: block; }
+  .info { display: grid; grid-template-columns: 70px 1fr; gap: 10px; align-items: center; }
+  .sw { width: 70px; height: 70px; border-radius: 12px; border: 2px solid var(--rule); }
+  .rgb .bar { height: 26px; margin-bottom: 4px; } .rgb .bar > b, .rgb .bar > span { top: 2px; font-size: 14px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; }
+  .filters button { font-size: 14px; min-height: 40px; padding: 6px 10px; background: #fff; color: var(--pur); border: 2px solid var(--rule); }
+  .filters button.on { background: var(--pur); color: #fff; border-color: var(--pur); }
+  .sl { display: grid; grid-template-columns: 52px 1fr 48px; gap: 8px; align-items: center; margin: 4px 0; }
+  .formula { font-size: 15px; background: var(--pur-t); border-radius: 10px; padding: 8px 10px; }
+</style>
+</head>
+<body>
+<header class="app"><h1>ピクセル顕微鏡</h1><span class="tag">写真は数字の集まり</span></header>
+<main>
+  <div class="card">
+    <div class="row">
+      <label class="btn grow" for="file">📷 写真をとる</label>
+      <input type="file" id="file" accept="image/*" capture="environment" class="hidden">
+      <button class="ghost" id="sample">見本の写真</button>
+    </div>
+    <p class="muted">物や景色をとろう（人の顔はとらない）。写真はこのスマホの中だけで使います。</p>
+  </div>
+  <canvas id="view" width="720" height="720"></canvas>
+  <div class="card" style="margin-top:10px">
+    <div class="row"><span class="muted">拡大</span><input type="range" id="zoom" min="0" max="100" value="0" class="grow"><b id="zv">×1</b></div>
+    <p class="muted">指で動かす・2本指で広げる・マスをタップすると数字が出ます。</p>
+  </div>
+  <div class="card">
+    <h2>タップしたマス（画素）の数字</h2>
+    <div class="info"><div class="sw" id="sw"></div>
+      <div class="rgb" id="rgb"><p class="muted">写真のマスをタップしてね</p></div></div>
+    <p class="muted" id="pos"></p>
+    <p class="note">チャレンジ：白い紙の R・G・B はいくつ？ 自分の筆箱の色は？</p>
+  </div>
+  <div class="card">
+    <h2>フィルターは「計算」</h2>
+    <div class="filters" id="filters">
+      <button data-f="none" class="on">元の色</button><button data-f="gray">白黒</button><button data-f="inv">反転</button>
+      <button data-f="sepia">セピア風</button><button data-f="red">赤だけ残す</button><button data-f="bright">明るく</button><button data-f="mine">自分のフィルター</button>
+    </div>
+    <div id="mine" class="hidden" style="margin-top:10px">
+      <div class="sl"><b style="color:var(--coral)">R ×</b><input type="range" id="kr" min="0" max="20" value="10"><span id="vr">1.0</span></div>
+      <div class="sl"><b style="color:var(--mint)">G ×</b><input type="range" id="kg" min="0" max="20" value="10"><span id="vg">1.0</span></div>
+      <div class="sl"><b style="color:var(--sky)">B ×</b><input type="range" id="kb" min="0" max="20" value="10"><span id="vb">1.0</span></div>
+      <p class="muted">できたフィルターに名前をつけて、となりのペアに見せよう。</p>
+    </div>
+    <div class="formula" id="formula">元の色：R・G・B をそのまま使う</div>
+  </div>
+</main>
+<footer class="app">愛知県立高等専門学校 公開講座「使う人から作る人へ」</footer>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var view = $("view"), g = view.getContext("2d");
+  var src = null, W = 0, H = 0, orig = null, shown = null, off = document.createElement("canvas"), og = off.getContext("2d", { willReadFrequently: true });
+  var zoom = 1, cx = 0, cy = 0, sel = null, filter = "none", k = { r: 1, g: 1, b: 1 };
+
+  function setImage(img) {
+    var s = Math.min(1, 240 / Math.max(img.width, img.height));
+    W = Math.max(1, Math.round(img.width * s)); H = Math.max(1, Math.round(img.height * s));
+    off.width = W; off.height = H; og.drawImage(img, 0, 0, W, H);
+    orig = og.getImageData(0, 0, W, H); cx = W / 2; cy = H / 2; sel = null; applyFilter(); setZoom(0);
+  }
+  $("file").onchange = function () {
+    var f = this.files && this.files[0]; if (!f) return;
+    var img = new Image(); img.onload = function () { setImage(img); URL.revokeObjectURL(img.src); }; img.src = URL.createObjectURL(f);
+  };
+  $("sample").onclick = function () {
+    var c = document.createElement("canvas"); c.width = 240; c.height = 180; var q = c.getContext("2d");
+    var gr = q.createLinearGradient(0, 0, 0, 180); gr.addColorStop(0, "#7EC8F0"); gr.addColorStop(1, "#FCE9C8"); q.fillStyle = gr; q.fillRect(0, 0, 240, 180);
+    q.fillStyle = "#3BA55C"; q.beginPath(); q.moveTo(0, 150); q.quadraticCurveTo(80, 100, 240, 140); q.lineTo(240, 180); q.lineTo(0, 180); q.fill();
+    q.fillStyle = "#F4B400"; q.beginPath(); q.arc(180, 50, 22, 0, 7); q.fill();
+    q.fillStyle = "#EE6A5B"; q.fillRect(40, 95, 50, 40); q.fillStyle = "#fff"; q.fillRect(55, 110, 14, 14);
+    q.fillStyle = "#3A247D"; q.fillRect(120, 110, 30, 30);
+    setImage(c);
+  };
+
+  // ---- フィルター（計算） ----
+  function f1(r, gg, b) {
+    switch (filter) {
+      case "gray": var m = Math.round((r + gg + b) / 3); return [m, m, m];
+      case "inv": return [255 - r, 255 - gg, 255 - b];
+      case "sepia": return [Math.min(255, Math.round(r * 1.2)), Math.round(gg * 0.95), Math.round(b * 0.7)];
+      case "red": if (r > 120 && r > gg * 1.4 && r > b * 1.4) return [r, gg, b]; var a = Math.round((r + gg + b) / 3); return [a, a, a];
+      case "bright": return [Math.min(255, Math.round(r * 1.5)), Math.min(255, Math.round(gg * 1.5)), Math.min(255, Math.round(b * 1.5))];
+      case "mine": return [Math.min(255, Math.round(r * k.r)), Math.min(255, Math.round(gg * k.g)), Math.min(255, Math.round(b * k.b))];
+      default: return [r, gg, b];
+    }
+  }
+  function applyFilter() {
+    if (!orig) return;
+    shown = og.createImageData(W, H);
+    for (var i = 0; i < orig.data.length; i += 4) { var o = f1(orig.data[i], orig.data[i + 1], orig.data[i + 2]); shown.data[i] = o[0]; shown.data[i + 1] = o[1]; shown.data[i + 2] = o[2]; shown.data[i + 3] = 255; }
+    og.putImageData(shown, 0, 0); draw(); info();
+  }
+  Array.prototype.forEach.call($("filters").querySelectorAll("button"), function (b) {
+    b.onclick = function () {
+      filter = b.getAttribute("data-f");
+      Array.prototype.forEach.call($("filters").querySelectorAll("button"), function (x) { x.classList.toggle("on", x === b); });
+      $("mine").classList.toggle("hidden", filter !== "mine"); applyFilter();
+    };
+  });
+  ["r", "g", "b"].forEach(function (c) {
+    $("k" + c).oninput = function () { k[c] = +this.value / 10; $("v" + c).textContent = k[c].toFixed(1); applyFilter(); };
+  });
+
+  // ---- 表示（拡大・移動） ----
+  function setZoom(v) { $("zoom").value = v; zoom = Math.pow(80, v / 100); $("zv").textContent = "×" + (zoom < 10 ? zoom.toFixed(1) : Math.round(zoom)); draw(); }
+  $("zoom").oninput = function () { setZoom(+this.value); };
+  function base() { return Math.min(view.width / W, view.height / H); }
+  function draw() {
+    g.fillStyle = "#222"; g.fillRect(0, 0, view.width, view.height);
+    if (!orig) { g.fillStyle = "#bbb"; g.font = "28px sans-serif"; g.textAlign = "center"; g.fillText("「写真をとる」か「見本の写真」を押してね", view.width / 2, view.height / 2); return; }
+    var s = base() * zoom, ox = view.width / 2 - cx * s, oy = view.height / 2 - cy * s;
+    g.imageSmoothingEnabled = false; g.drawImage(off, ox, oy, W * s, H * s);
+    if (s >= 14) {
+      g.strokeStyle = "rgba(255,255,255,.35)"; g.lineWidth = 1; g.beginPath();
+      var x0 = Math.max(0, Math.floor(-ox / s)), x1 = Math.min(W, Math.ceil((view.width - ox) / s)), y0 = Math.max(0, Math.floor(-oy / s)), y1 = Math.min(H, Math.ceil((view.height - oy) / s));
+      for (var x = x0; x <= x1; x++) { g.moveTo(ox + x * s, oy + y0 * s); g.lineTo(ox + x * s, oy + y1 * s); }
+      for (var y = y0; y <= y1; y++) { g.moveTo(ox + x0 * s, oy + y * s); g.lineTo(ox + x1 * s, oy + y * s); }
+      g.stroke();
+      if (s >= 56) {
+        g.font = "bold " + Math.round(s / 5.2) + "px sans-serif"; g.textAlign = "center";
+        for (y = y0; y < y1; y++) for (x = x0; x < x1; x++) {
+          var i = (y * W + x) * 4, d = shown.data, lum = d[i] * .3 + d[i + 1] * .59 + d[i + 2] * .11;
+          g.fillStyle = lum > 140 ? "#000" : "#fff";
+          [d[i], d[i + 1], d[i + 2]].forEach(function (v, j) { g.fillText(v, ox + (x + .5) * s, oy + y * s + s * (0.3 + j * 0.26)); });
+        }
+      }
+    }
+    if (sel) { g.strokeStyle = "#E0A32E"; g.lineWidth = 4; g.strokeRect(ox + sel.x * s, oy + sel.y * s, Math.max(6, s), Math.max(6, s)); }
+  }
+  function info() {
+    if (!sel || !orig) return;
+    var i = (sel.y * W + sel.x) * 4, r = orig.data[i], gg = orig.data[i + 1], b = orig.data[i + 2], o = f1(r, gg, b);
+    $("sw").style.background = "rgb(" + o.join(",") + ")";
+    $("pos").textContent = "場所：横 " + sel.x + "、たて " + sel.y + "（この写真は 横" + W + " × たて" + H + " ＝ " + (W * H).toLocaleString() + "マス）";
+    $("rgb").innerHTML = [["R（赤）", o[0], "#EE6A5B"], ["G（緑）", o[1], "#22A57A"], ["B（青）", o[2], "#2E9BD6"]].map(function (a) {
+      return '<div class="bar"><i style="width:' + (a[1] / 2.55) + "%;background:" + a[2] + '"></i><b>' + a[0] + "</b><span>" + a[1] + "</span></div>";
+    }).join("");
+    var t = { none: "元の色：(" + r + ", " + gg + ", " + b + ") をそのまま使う",
+      gray: "白黒：(R＋G＋B)÷3 ＝ (" + r + "＋" + gg + "＋" + b + ")÷3 ＝ " + o[0] + " を、R・G・B に入れる",
+      inv: "反転：255−R、255−G、255−B ＝ (" + o.join(", ") + ")",
+      sepia: "セピア風：R×1.2、G×0.95、B×0.7 ＝ (" + o.join(", ") + ")",
+      red: "赤だけ残す：もし 赤が強いなら そのまま、でなければ 白黒 ＝ (" + o.join(", ") + ")",
+      bright: "明るく：全部×1.5（255で止める）＝ (" + o.join(", ") + ")",
+      mine: "自分のフィルター：R×" + k.r.toFixed(1) + "、G×" + k.g.toFixed(1) + "、B×" + k.b.toFixed(1) + " ＝ (" + o.join(", ") + ")" };
+    $("formula").textContent = t[filter];
+  }
+
+  // ---- 指の操作（ドラッグで移動・2本指で拡大・タップで選ぶ） ----
+  var pts = {}, start = null, moved = false, pinch0 = null;
+  function rel(e) { var r = view.getBoundingClientRect(); return { x: (e.clientX - r.left) * view.width / r.width, y: (e.clientY - r.top) * view.height / r.height }; }
+  view.addEventListener("pointerdown", function (e) { view.setPointerCapture(e.pointerId); pts[e.pointerId] = rel(e); start = { p: rel(e), cx: cx, cy: cy }; moved = false; pinch0 = null; });
+  view.addEventListener("pointermove", function (e) {
+    if (!pts[e.pointerId] || !orig) return; pts[e.pointerId] = rel(e);
+    var ids = Object.keys(pts);
+    if (ids.length >= 2) {
+      var a = pts[ids[0]], b = pts[ids[1]], d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (!pinch0) pinch0 = { d: d, v: +$("zoom").value }; else setZoom(Math.max(0, Math.min(100, pinch0.v + 100 * Math.log(d / pinch0.d) / Math.log(80))));
+      moved = true; return;
+    }
+    var p = rel(e), s = base() * zoom;
+    if (Math.hypot(p.x - start.p.x, p.y - start.p.y) > 8) moved = true;
+    if (moved) { cx = Math.max(0, Math.min(W, start.cx - (p.x - start.p.x) / s)); cy = Math.max(0, Math.min(H, start.cy - (p.y - start.p.y) / s)); draw(); }
+  });
+  function up(e) {
+    if (pts[e.pointerId] && !moved && orig && Object.keys(pts).length === 1) {
+      var p = rel(e), s = base() * zoom, x = Math.floor(cx + (p.x - view.width / 2) / s), y = Math.floor(cy + (p.y - view.height / 2) / s);
+      if (x >= 0 && y >= 0 && x < W && y < H) { sel = { x: x, y: y }; draw(); info(); }
+    }
+    delete pts[e.pointerId]; if (!Object.keys(pts).length) pinch0 = null;
+  }
+  view.addEventListener("pointerup", up); view.addEventListener("pointercancel", up);
+  draw();
+})();
+</script>
+</body>
+</html>

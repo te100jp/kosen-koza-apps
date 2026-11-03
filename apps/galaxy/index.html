@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ギャラクシーラボ</title>
+<link rel="stylesheet" href="../../common/style.css">
+<style>
+  .gimg { width: 100%; max-width: 360px; aspect-ratio: 1/1; border-radius: 14px; display: block; margin: 0 auto 10px; background: #0e0c22; object-fit: cover; }
+  .qq { font-size: 20px; font-weight: 800; margin: 6px 0 10px; text-align: center; }
+  .ans { display: grid; gap: 8px; }
+  .ans button { min-height: 56px; font-size: 18px; }
+  .score { font-weight: 700; }
+  .node { border: 2px solid var(--rule); border-radius: 12px; padding: 8px; margin: 6px 0; background: #fff; }
+  .node .br { margin: 6px 0 0 10px; padding-left: 8px; border-left: 3px solid var(--rule); }
+  .node .lab { font-size: 13px; font-weight: 700; }
+  .node .lab.y { color: var(--mint); } .node .lab.n { color: var(--coral); }
+  .node select { font-size: 15px; padding: 6px 8px; }
+  .miss { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .miss div { font-size: 11px; text-align: center; }
+  .miss img { width: 100%; border-radius: 8px; display: block; }
+  .tr { width: 100%; border-collapse: collapse; font-size: 15px; } .tr td { padding: 6px; border-bottom: 1px solid var(--rule); }
+  #zoomcv { width: 100%; max-width: 360px; aspect-ratio: 1/1; display: block; margin: 0 auto; border-radius: 14px; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<header class="app"><h1>ギャラクシーラボ</h1><span class="tag">宇宙の研究者になろう</span></header>
+<nav class="tabs">
+  <button data-tab="look" class="on">① のぞく</button>
+  <button data-tab="practice">② 練習</button>
+  <button data-tab="class">③ みんなで</button>
+  <button data-tab="tree">④ 質問の木</button>
+  <button data-tab="gz">⑤ Galaxy Zoo</button>
+</nav>
+<main>
+  <section id="look">
+    <div class="card">
+      <h2>宇宙の写真も、画素（マス）の集まり</h2>
+      <canvas id="zoomcv" width="360" height="360"></canvas>
+      <div class="row" style="margin-top:8px"><span class="muted">拡大</span><input type="range" id="zoom" min="0" max="100" value="0" class="grow"></div>
+      <p class="muted">拡大すると、小さなマスが見えてきます。1マスの色は R・G・B の3つの数字。第1弾で学んだスマホの写真と同じです。</p>
+      <p class="note">ここの銀河は、形を学ぶためのイラストです。本物の写真は「⑤ Galaxy Zoo」で見られます。</p>
+    </div>
+  </section>
+
+  <section id="practice" class="hidden">
+    <div class="card">
+      <div class="row"><span class="grow score" id="pscore">0問中 0問 正解</span><button class="ghost" id="pnext">次のカード</button></div>
+      <img class="gimg" id="pimg" alt="銀河カード">
+      <div class="qq" id="pq"></div>
+      <div class="ans" id="pans"></div>
+      <p id="pres" class="hidden"></p>
+    </div>
+  </section>
+
+  <section id="class" class="hidden">
+    <div class="card">
+      <h2>同じ5つの銀河を、クラス全員で分類しよう</h2>
+      <p>答えの割合が、スクリーンに出ます。意見が分かれた銀河はどれかな？</p>
+      <a class="btn big" id="classlink" href="../vote/index.html?set=koza4">みんなで分類を始める</a>
+      <p class="muted">1人の答えはまちがうこともあるけれど、何人もの答えを集めると、割合で確からしさが分かります。</p>
+    </div>
+  </section>
+
+  <section id="tree" class="hidden">
+    <div class="card">
+      <h2>見分け方の「質問の木」を作ろう</h2>
+      <p class="muted">質問を選び、「はい」「いいえ」の行き先を決めます。行き先は、次の質問か、銀河の種類です。</p>
+      <div id="treebox"></div>
+      <div class="row" style="margin-top:8px"><button class="mint grow" id="ttest">カード20枚でテスト</button><button class="ghost" id="treset">はじめにもどす</button></div>
+    </div>
+    <div class="card" id="tresult"><h2>テストの結果</h2><p class="muted">「カード20枚でテスト」を押そう。</p></div>
+    <div class="card" style="text-align:center">
+      <h2>となりのペアと木を交換しよう</h2>
+      <div class="qrbox"><canvas id="tqr"></canvas></div>
+      <p class="muted">このQRコードを読むと、同じ質問の木が開きます。</p>
+    </div>
+  </section>
+
+  <section id="gz" class="hidden">
+    <div class="card">
+      <h2>本物の銀河を分類しよう（Galaxy Zoo）</h2>
+      <p>登録しなくても、スマホのブラウザで参加できます。ログインせず、名前やメールは入れません。</p>
+      <a class="btn big" href="https://www.zooniverse.org/projects/zookeeper/Galaxy-Zoo" target="_blank" rel="noopener">Galaxy Zoo を開く</a>
+      <p class="muted">開いたら「Classify」をタップ。写真を見て答え、最後に「Done」で1つの分類が完了です。</p>
+    </div>
+    <div class="card">
+      <h2>英語の対訳</h2>
+      <table class="tr">
+        <tr><td><b>Smooth</b></td><td>なめらかで丸い</td></tr>
+        <tr><td><b>Features or Disk</b></td><td>模様や円ばんがある</td></tr>
+        <tr><td><b>Star or Artifact</b></td><td>星か、写真のキズ</td></tr>
+        <tr><td><b>Edge-on</b></td><td>円ばんを横から見ている</td></tr>
+        <tr><td><b>Bar</b></td><td>中心に棒がある</td></tr>
+        <tr><td><b>Spiral arms</b></td><td>うずの腕がある</td></tr>
+        <tr><td><b>Yes ／ No</b></td><td>はい ／ いいえ</td></tr>
+        <tr><td><b>Not sure</b></td><td>分からない</td></tr>
+        <tr><td><b>Done</b></td><td>終わり（送る）</td></tr>
+      </table>
+      <p class="note">迷ったら「分からない」も大切なデータ。ふしぎな形を見つけたら、先生に知らせよう。</p>
+    </div>
+  </section>
+</main>
+<footer class="app">愛知県立高等専門学校 公開講座「使う人から作る人へ」 第4弾</footer>
+<script src="../../common/qrcode.js"></script>
+<script src="../../common/api.js"></script>
+<script src="cards.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var CARDS = window.GALAXY_CARDS || [];
+  var TYPES = ["だ円銀河", "渦巻銀河", "棒渦巻銀河", "不規則銀河", "分からない"];
+  var Q = { smooth: "なめらかで丸い？", bar: "中心に棒がある？", arms: "うずの腕がある？", irregular: "形がばらばら？", bright: "中心が明るい？", blue: "青っぽい星が多い？" };
+
+  Array.prototype.forEach.call(document.querySelectorAll(".tabs button"), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".tabs button"), function (x) { x.classList.toggle("on", x === b); });
+      ["look", "practice", "class", "tree", "gz"].forEach(function (t) { $(t).classList.toggle("hidden", t !== b.getAttribute("data-tab")); });
+      if (b.getAttribute("data-tab") === "tree") shareTree();
+    };
+  });
+  // みんなで分類のリンク（部屋の設定を引きつぐ）
+  var qs = new URLSearchParams(location.search), cl = new URL("../vote/index.html", location.href); cl.searchParams.set("set", "koza4");
+  ["room", "api"].forEach(function (k) { if (qs.get(k)) cl.searchParams.set(k, qs.get(k)); }); $("classlink").href = cl.href;
+
+  // ① のぞく（拡大）
+  var zc = $("zoomcv"), zg = zc.getContext("2d"), zimg = new Image();
+  zimg.onload = drawZoom; zimg.src = "img/vote2.png";
+  function drawZoom() {
+    var v = +$("zoom").value, cells = Math.round(360 / Math.pow(40, v / 100));      // 見えるマスの数（小さいほど拡大）
+    var tmp = document.createElement("canvas"); tmp.width = tmp.height = Math.max(4, Math.round(cells / 1));
+    var srcS = cells, sx = Math.max(0, Math.min(360 - srcS, 360 * 0.62 - srcS / 2)), sy = Math.max(0, Math.min(360 - srcS, 360 * 0.45 - srcS / 2));
+    tmp.getContext("2d").drawImage(zimg, sx * zimg.width / 360, sy * zimg.height / 360, srcS * zimg.width / 360, srcS * zimg.height / 360, 0, 0, tmp.width, tmp.height);
+    zg.imageSmoothingEnabled = false; zg.clearRect(0, 0, 360, 360); zg.drawImage(tmp, 0, 0, 360, 360);
+    if (cells <= 24) { zg.strokeStyle = "rgba(255,255,255,.45)"; var s = 360 / tmp.width; for (var i = 0; i <= tmp.width; i++) { zg.beginPath(); zg.moveTo(i * s, 0); zg.lineTo(i * s, 360); zg.stroke(); zg.beginPath(); zg.moveTo(0, i * s); zg.lineTo(360, i * s); zg.stroke(); } }
+  }
+  $("zoom").oninput = drawZoom;
+
+  // ② 練習（Galaxy Zoo と同じ順の質問）
+  var order = CARDS.map(function (c, i) { return i; }).sort(function () { return Math.random() - .5; }), pi = -1, right = 0, done = 0, path = [];
+  function nextCard() { pi = (pi + 1) % order.length; path = []; $("pres").classList.add("hidden"); $("pimg").src = CARDS[order[pi]].img; ask("smooth"); }
+  function ask(step) {
+    var opts = step === "smooth" ? [["なめらかで丸い", "smooth"], ["模様や円ばんがある", "features"], ["星か、写真のキズ", "star"]] :
+               step === "bar" ? [["はい（棒がある）", "bar"], ["いいえ", "nobar"]] : [["はい（うずの腕がある）", "arms"], ["いいえ", "noarms"]];
+    $("pq").textContent = step === "smooth" ? "質問1：なめらか？ それとも模様がある？" : step === "bar" ? "質問2：中心に棒がある？" : "質問3：うずの腕がある？";
+    $("pans").innerHTML = opts.map(function (o, i) { return '<button class="' + ["sky", "coral", "ghost"][i] + '" data-v="' + o[1] + '">' + o[0] + "</button>"; }).join("");
+    Array.prototype.forEach.call($("pans").querySelectorAll("button"), function (b) { b.onclick = function () { answer(step, b.getAttribute("data-v")); }; });
+  }
+  function answer(step, v) {
+    path.push(v);
+    if (step === "smooth") { if (v === "features") return ask("bar"); return finish(v === "smooth" ? "だ円銀河" : "星か写真のキズ"); }
+    if (step === "bar") return ask("arms");
+    var bar = path.indexOf("bar") >= 0, arms = v === "arms";
+    finish(bar ? "棒渦巻銀河" : arms ? "渦巻銀河" : "不規則銀河");
+  }
+  function finish(mine) {
+    var c = CARDS[order[pi]], ok = mine === c.type; done++; if (ok) right++;
+    $("pans").innerHTML = ""; $("pq").textContent = "あなたの答え：" + mine;
+    $("pres").classList.remove("hidden"); $("pres").className = ok ? "ok" : "warn";
+    $("pres").innerHTML = (ok ? "正解！ " : "おしい！ ") + "このカードは <b>" + c.type + "</b> です。" + (ok ? "" : "<br>どの質問で迷ったかな？");
+    $("pscore").textContent = done + "問中 " + right + "問 正解";
+  }
+  $("pnext").onclick = nextCard; nextCard();
+
+  // ④ 質問の木
+  function defTree() { return { q: "smooth", y: { t: "だ円銀河" }, n: { q: "arms", y: { t: "渦巻銀河" }, n: { t: "不規則銀河" } } }; }
+  var tree = null;
+  try { var h = new URLSearchParams(location.hash.slice(1)).get("tree"); if (h) tree = JSON.parse(decodeURIComponent(escape(atob(h.replace(/-/g, "+").replace(/_/g, "/"))))); } catch (e) { tree = null; }
+  if (!valid(tree, 0)) { try { tree = JSON.parse(localStorage.getItem("gl_tree") || "null"); } catch (e) { tree = null; } }
+  if (!valid(tree, 0)) tree = defTree();
+  function valid(n, d) { if (!n || d > 5) return false; if (n.t) return TYPES.indexOf(n.t) >= 0; return !!Q[n.q] && valid(n.y, d + 1) && valid(n.n, d + 1); }
+  function save() { try { localStorage.setItem("gl_tree", JSON.stringify(tree)); } catch (e) {} shareTree(); }
+  function sel(options, value) { return "<select>" + options.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === value ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select>"; }
+  function renderNode(node, depth) {
+    var d = document.createElement("div"); d.className = "node";
+    d.innerHTML = '<div class="row"><b>質問</b>' + sel(Object.keys(Q).map(function (k) { return [k, Q[k]]; }), node.q) + "</div>";
+    d.querySelector("select").onchange = function () { node.q = this.value; save(); };
+    ["y", "n"].forEach(function (k) {
+      var br = document.createElement("div"); br.className = "br";
+      var child = node[k], val = child.t ? "t:" + child.t : "q";
+      var opts = TYPES.map(function (t) { return ["t:" + t, "→ " + t]; }); if (depth < 3) opts.push(["q", "→ 次の質問へ"]);
+      br.innerHTML = '<div class="lab ' + k + '">' + (k === "y" ? "はい" : "いいえ") + "</div>" + sel(opts, val);
+      br.querySelector("select").onchange = function () {
+        var v = this.value; node[k] = v === "q" ? { q: "bar", y: { t: "棒渦巻銀河" }, n: { t: "渦巻銀河" } } : { t: v.slice(2) };
+        save(); renderTree();
+      };
+      if (!child.t) br.appendChild(renderNode(child, depth + 1));
+      d.appendChild(br);
+    });
+    return d;
+  }
+  function renderTree() { $("treebox").innerHTML = ""; $("treebox").appendChild(renderNode(tree, 0)); }
+  function classify(node, f) { while (!node.t) node = f[node.q] ? node.y : node.n; return node.t; }
+  $("ttest").onclick = function () {
+    var miss = [], ok = 0;
+    CARDS.forEach(function (c) { var p = classify(tree, c.f); if (p === c.type) ok++; else miss.push({ c: c, p: p }); });
+    var pct = Math.round(ok * 100 / CARDS.length);
+    $("tresult").innerHTML = "<h2>テストの結果</h2><div class='bar' style='height:40px'><i style='width:" + pct + "%;background:var(--mint)'></i><b>正解率</b><span>" + ok + "/" + CARDS.length + "枚（" + pct + "%）</span></div>" +
+      (miss.length ? "<p class='muted'>まちがえたカード（上：本当の種類／下：木の答え）。質問を足したり、順番を変えたりしてみよう。</p><div class='miss'>" +
+        miss.map(function (m) { return "<div><img src='" + m.c.img + "'>" + m.c.type + "<br>→" + m.p + "</div>"; }).join("") + "</div>" : "<p class='ok'>全部正解！ となりのペアのカードでも試してもらおう。</p>");
+  };
+  $("treset").onclick = function () { tree = defTree(); save(); renderTree(); };
+  function shareTree() {
+    var s = btoa(unescape(encodeURIComponent(JSON.stringify(tree)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    drawQR($("tqr"), location.href.split("#")[0] + "#tree=" + s, 240);
+  }
+  renderTree();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIメーカー</title>
+<link rel="stylesheet" href="../../common/style.css">
+<style>
+  .camwrap { position: relative; }
+  .camwrap .flip { position: absolute; right: 8px; top: 8px; min-height: 36px; padding: 4px 10px; font-size: 13px; background: rgba(0,0,0,.55); }
+  .cls { border: 2px solid var(--rule); border-radius: 12px; padding: 10px; margin-bottom: 10px; }
+  .cls .row input { flex: 1; width: auto; font-weight: 700; }
+  .thumbs { display: flex; gap: 4px; margin: 8px 0; min-height: 44px; overflow: hidden; }
+  .thumbs canvas { width: 44px; height: 44px; border-radius: 6px; flex: none; }
+  .cap { user-select: none; -webkit-user-select: none; touch-action: none; }
+  .cap.on { background: var(--coral) !important; }
+  .pred .bar { margin-bottom: 8px; height: 40px; } .pred .bar > b, .pred .bar > span { top: 8px; font-size: 17px; }
+  .chart { width: 100%; height: 160px; background: #fff; border: 1px solid var(--rule); border-radius: 10px; }
+  .big-result { font-size: 30px; font-weight: 800; text-align: center; padding: 14px; border-radius: 12px; background: var(--pur-t); }
+  .hands { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: center; }
+  .hands div { background: #fff; border: 2px solid var(--rule); border-radius: 12px; padding: 10px; }
+  .hands .h { font-size: 44px; }
+  .count { font-size: 64px; font-weight: 800; text-align: center; color: var(--coral); }
+</style>
+</head>
+<body>
+<header class="app"><h1>AIメーカー</h1><span class="tag" id="mode">準備中</span></header>
+<nav class="tabs">
+  <button data-tab="make" class="on">① 集める・学ぶ</button>
+  <button data-tab="test">② ためす</button>
+  <button data-tab="janken">③ AIじゃんけん</button>
+</nav>
+<main>
+  <div class="card" id="startbox">
+    <h2>カメラで、物を見分けるAIを作ろう</h2>
+    <p class="muted">写真はこのスマホの中だけで使い、どこにも送りません。物や手だけを映し、顔や人は映さないでね。</p>
+    <button class="big" id="start">はじめる（カメラを使う）</button>
+    <p id="err" class="warn hidden"></p>
+  </div>
+  <div class="camwrap hidden" id="camwrap">
+    <video id="video" class="cam" playsinline muted autoplay></video>
+    <button class="flip" id="flip">カメラ切りかえ</button>
+  </div>
+  <div style="height:10px"></div>
+
+  <section id="make">
+    <div class="card">
+      <h2>手順①　クラス（見分けるグループ）に名前をつける</h2>
+      <div id="classes"></div>
+      <div class="row">
+        <button class="ghost" id="add">＋ クラスを追加</button>
+        <button class="ghost" id="preset">じゃんけん用にする</button>
+      </div>
+      <p class="muted">手順②　撮影ボタンを<b>長押し</b>すると、写真が続けて撮れます。1つのクラスに30枚くらい。向き・近さ・明るさ・背景を変えよう。</p>
+    </div>
+    <div class="card">
+      <h2>手順③　学習させる</h2>
+      <button class="big mint" id="train">学習する</button>
+      <p class="muted" id="tmsg">数十秒かかることがあります。その間はページを閉じないでね。</p>
+      <canvas id="chart" class="chart" width="600" height="160"></canvas>
+      <p class="muted">グラフは、学習に使った写真を正しく見分けられた割合です。</p>
+    </div>
+  </section>
+
+  <section id="test" class="hidden">
+    <div class="card">
+      <h2>手順④　ためしてみる</h2>
+      <div class="pred" id="pred"><p class="muted">先に「学習する」をしてね。</p></div>
+      <p class="muted">自信がこれより低いときは「もう一度見せて」と出す：<b id="thv">70</b>%</p>
+      <input type="range" id="th" min="30" max="95" value="70">
+      <p id="advice" class="note">チャレンジ：AIが迷う（50%くらい）物を探そう。</p>
+    </div>
+  </section>
+
+  <section id="janken" class="hidden">
+    <div class="card">
+      <h2>AIじゃんけん</h2>
+      <p class="muted">「じゃんけん用にする」で グー・チョキ・パー の3つのクラスを作り、手の写真を20枚くらいずつ集めて学習してから遊ぼう。</p>
+      <p class="muted">コンピュータの出し方（ルール）</p>
+      <div class="row" id="rules">
+        <button class="sky sel" data-r="random">ふつう（ランダム）</button>
+        <button class="coral" data-r="win">いじわる（勝つ）</button>
+        <button class="mint" data-r="lose">やさしい（負ける）</button>
+      </div>
+      <div style="height:10px"></div>
+      <div class="count hidden" id="count"></div>
+      <div class="hands"><div><div class="muted">あなた</div><div class="h" id="you">？</div></div><div><div class="muted">コンピュータ</div><div class="h" id="cpu">？</div></div></div>
+      <div style="height:10px"></div>
+      <div class="big-result" id="result">「じゃんけん ポン！」を押そう</div>
+      <div style="height:10px"></div>
+      <button class="big coral" id="pon">じゃんけん ポン！</button>
+      <p class="muted" id="score">かち 0 ／ まけ 0 ／ あいこ 0</p>
+      <p class="note">もし あなたが「グー」なら → いじわるモードのコンピュータは「パー」を出す。これが「もし〜なら」（条件分岐）です。</p>
+    </div>
+  </section>
+</main>
+<footer class="app">AIの計算はすべてこのスマホの中で行います。写真は保存されず、ページを閉じると消えます。</footer>
+<script src="../../common/vendor/tf.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var MOBILENET = "https://storage.googleapis.com/tfjs-models/tfjs/mobilenet_v1_0.25_224/model.json";
+  var video = $("video"), stream = null, facing = "environment";
+  var classes = [], feat = null, featName = "", head = null, useTF = false, trained = null;
+  var COLORS = ["#2E9BD6", "#EE6A5B", "#22A57A", "#E0A32E", "#8A7FB0"];
+
+  // ---------------- タブ ----------------
+  Array.prototype.forEach.call(document.querySelectorAll(".tabs button"), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".tabs button"), function (x) { x.classList.toggle("on", x === b); });
+      ["make", "test", "janken"].forEach(function (t) { $(t).classList.toggle("hidden", t !== b.getAttribute("data-tab")); });
+    };
+  });
+
+  // ---------------- カメラ ----------------
+  function startCam() {
+    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+    return navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false })
+      .then(function (s) { stream = s; video.srcObject = s; return video.play(); });
+  }
+  $("start").onclick = function () {
+    $("start").disabled = true; $("start").textContent = "準備しています…";
+    startCam().then(function () {
+      $("startbox").classList.add("hidden"); $("camwrap").classList.remove("hidden");
+      return loadFeature();
+    }).catch(function (e) {
+      $("start").disabled = false; $("start").textContent = "はじめる（カメラを使う）";
+      $("err").classList.remove("hidden");
+      $("err").textContent = "カメラが使えません。ブラウザの設定でカメラを「許可」にしてから、もう一度押してね。（" + (e && e.name || e) + "）";
+    });
+  };
+  $("flip").onclick = function () { facing = facing === "environment" ? "user" : "environment"; startCam(); };
+
+  // ---------------- 特徴（AIが見る数字）を取り出す ----------------
+  function loadFeature() {
+    $("mode").textContent = "AIを準備中…";
+    if (!window.tf) return Promise.resolve(fallback());
+    return tf.loadLayersModel(MOBILENET).then(function (m) {
+      var layer = m.getLayer("conv_pw_13_relu");
+      var trunc = tf.model({ inputs: m.inputs, outputs: layer.output });
+      feat = function (src) {
+        return tf.tidy(function () {
+          var img = tf.browser.fromPixels(src);
+          var h = img.shape[0], w = img.shape[1], s = Math.min(h, w);
+          var crop = img.slice([Math.floor((h - s) / 2), Math.floor((w - s) / 2), 0], [s, s, 3]);
+          var x = tf.image.resizeBilinear(crop, [224, 224]).toFloat().div(127.5).sub(1).expandDims(0);
+          return trunc.predict(x).mean([1, 2]).squeeze();
+        });
+      };
+      useTF = true; featName = "MobileNet"; $("mode").textContent = "AIの準備OK";
+    }).catch(function () { fallback(); });
+  }
+  // インターネットでAIの部品が読めないときの代わり（小さくした写真の色を数字にする）
+  function fallback() {
+    useTF = false; featName = "かんたん版";
+    var c = document.createElement("canvas"); c.width = c.height = 16; var g = c.getContext("2d", { willReadFrequently: true });
+    feat = function (src) {
+      var w = src.videoWidth || src.width, h = src.videoHeight || src.height, s = Math.min(w, h);
+      g.drawImage(src, (w - s) / 2, (h - s) / 2, s, s, 0, 0, 16, 16);
+      var d = g.getImageData(0, 0, 16, 16).data, v = [];
+      for (var i = 0; i < d.length; i += 4) v.push(d[i] / 255, d[i + 1] / 255, d[i + 2] / 255);
+      var m = v.reduce(function (a, b) { return a + b; }, 0) / v.length;
+      return v.map(function (x) { return x - m; });
+    };
+    $("mode").textContent = "かんたん版のAI";
+    return null;
+  }
+  function toArray(f) { return useTF ? Array.from(f.dataSync()) : f; }
+
+  // ---------------- クラス ----------------
+  function addClass(name) {
+    if (classes.length >= 5) return;
+    var c = { name: name || ("クラス" + (classes.length + 1)), samples: [], el: null };
+    classes.push(c); renderClasses(); trained = null;
+  }
+  function renderClasses() {
+    var box = $("classes"); box.innerHTML = "";
+    classes.forEach(function (c, i) {
+      var d = document.createElement("div"); d.className = "cls"; d.style.borderColor = COLORS[i];
+      d.innerHTML = '<div class="row"><input type="text" maxlength="12" value="' + c.name.replace(/"/g, "") + '"><span class="muted"><b class="n">' + c.samples.length + '</b>枚</span></div>' +
+        '<div class="thumbs"></div><div class="row"><button class="cap grow" style="background:' + COLORS[i] + '">長押しで撮影</button><button class="ghost clr">消す</button>' + (classes.length > 2 ? '<button class="ghost del">✕</button>' : "") + "</div>";
+      box.appendChild(d); c.el = d;
+      d.querySelector("input").oninput = function () { c.name = this.value || ("クラス" + (i + 1)); };
+      var cap = d.querySelector(".cap"), timer = null;
+      function down(e) { e.preventDefault(); if (!feat) { alert("先に「はじめる」を押してね"); return; } cap.classList.add("on"); shot(c); timer = setInterval(function () { shot(c); }, 160); }
+      function up() { cap.classList.remove("on"); clearInterval(timer); timer = null; }
+      cap.addEventListener("pointerdown", down); cap.addEventListener("pointerup", up); cap.addEventListener("pointerleave", up); cap.addEventListener("pointercancel", up);
+      cap.oncontextmenu = function (e) { e.preventDefault(); };
+      d.querySelector(".clr").onclick = function () { c.samples.forEach(function (s) { if (s.f && s.f.dispose) s.f.dispose(); }); c.samples = []; c.el.querySelector(".thumbs").innerHTML = ""; c.el.querySelector(".n").textContent = 0; trained = null; };
+      var del = d.querySelector(".del"); if (del) del.onclick = function () { classes.splice(i, 1); renderClasses(); trained = null; };
+      c.samples.slice(-8).forEach(function (s) { d.querySelector(".thumbs").appendChild(s.thumb); });
+    });
+  }
+  function shot(c) {
+    if (!video.videoWidth) return;
+    var f = feat(video);
+    var th = document.createElement("canvas"); th.width = th.height = 44;
+    var w = video.videoWidth, h = video.videoHeight, s = Math.min(w, h);
+    th.getContext("2d").drawImage(video, (w - s) / 2, (h - s) / 2, s, s, 0, 0, 44, 44);
+    c.samples.push({ f: f, thumb: th });
+    var tb = c.el.querySelector(".thumbs"); tb.insertBefore(th, tb.firstChild); while (tb.children.length > 8) tb.removeChild(tb.lastChild);
+    c.el.querySelector(".n").textContent = c.samples.length; trained = null;
+  }
+  $("add").onclick = function () { addClass(); };
+  $("preset").onclick = function () {
+    if (classes.some(function (c) { return c.samples.length; }) && !confirm("今の写真を消して、グー・チョキ・パーの3つのクラスにします。よいですか？")) return;
+    classes = []; ["グー", "チョキ", "パー"].forEach(addClass);
+  };
+  ["ペン", "消しゴム"].forEach(addClass);
+
+  // ---------------- 学習 ----------------
+  function drawChart(acc) {
+    var cv = $("chart"), g = cv.getContext("2d"), W = cv.width, H = cv.height;
+    g.clearRect(0, 0, W, H); g.strokeStyle = "#D5D0E3"; g.lineWidth = 1;
+    for (var p = 0; p <= 100; p += 25) { var y = H - 10 - (H - 20) * p / 100; g.beginPath(); g.moveTo(30, y); g.lineTo(W - 8, y); g.stroke(); g.fillStyle = "#6B6480"; g.font = "12px sans-serif"; g.fillText(p + "%", 0, y + 4); }
+    if (!acc.length) return;
+    g.strokeStyle = "#22A57A"; g.lineWidth = 3; g.beginPath();
+    acc.forEach(function (a, i) { var x = 30 + (W - 40) * (acc.length === 1 ? 0 : i / (acc.length - 1)), y = H - 10 - (H - 20) * a; if (i) g.lineTo(x, y); else g.moveTo(x, y); });
+    g.stroke();
+  }
+  drawChart([]);
+  $("train").onclick = function () {
+    var ok = classes.filter(function (c) { return c.samples.length >= 3; });
+    if (ok.length < 2) { $("tmsg").textContent = "2つ以上のクラスに、3枚以上ずつ写真を集めてね。"; return; }
+    if (ok.length < classes.length) { $("tmsg").textContent = "写真が3枚未満のクラスがあります。写真を集めてから学習しよう。"; return; }
+    $("train").disabled = true; $("tmsg").textContent = "学習中…";
+    var names = classes.map(function (c) { return c.name; });
+    var X = [], Y = [];
+    classes.forEach(function (c, ci) { c.samples.forEach(function (s) { X.push(toArray(s.f)); Y.push(ci); }); });
+    var acc = [];
+    if (useTF) {
+      if (head) head.dispose();
+      head = tf.sequential();
+      head.add(tf.layers.dense({ inputShape: [X[0].length], units: 64, activation: "relu" }));
+      head.add(tf.layers.dense({ units: names.length, activation: "softmax" }));
+      head.compile({ optimizer: tf.train.adam(0.001), loss: "categoricalCrossentropy", metrics: ["accuracy"] });
+      var xs = tf.tensor2d(X), ys = tf.oneHot(tf.tensor1d(Y, "int32"), names.length);
+      head.fit(xs, ys, { epochs: 30, batchSize: 16, shuffle: true, callbacks: { onEpochEnd: function (ep, logs) { acc.push(logs.acc || logs.accuracy || 0); drawChart(acc); $("tmsg").textContent = "学習中… " + (ep + 1) + "/30回"; } } })
+        .then(function () { xs.dispose(); ys.dispose(); done(); });
+    } else {
+      // かんたん版：近いものを探す方法（k近傍）で、1枚ずつ「自分以外の写真」でためして割合を出す
+      var i = 0;
+      (function step() {
+        var right = 0;
+        for (var k = 0; k <= i && k < X.length; k++) if (knn(X, Y, X[k], k, names.length).best === Y[k]) right++;
+        acc.push(right / Math.min(i + 1, X.length)); drawChart(acc);
+        i = Math.min(X.length - 1, i + Math.max(1, Math.floor(X.length / 25)));
+        if (acc.length < 26) setTimeout(step, 60); else done();
+      })();
+    }
+    function done() {
+      trained = { names: names, X: X, Y: Y };
+      $("train").disabled = false;
+      $("tmsg").textContent = "学習できました！（" + featName + "）「② ためす」で試そう。";
+    }
+  };
+  function knn(X, Y, v, skip, nc) {
+    var d = [];
+    for (var i = 0; i < X.length; i++) { if (i === skip) continue; var s = 0, a = X[i]; for (var j = 0; j < v.length; j++) { var t = a[j] - v[j]; s += t * t; } d.push([s, Y[i]]); }
+    d.sort(function (p, q) { return p[0] - q[0]; });
+    var K = Math.min(5, d.length), votes = new Array(nc).fill(0);
+    for (var k = 0; k < K; k++) votes[d[k][1]] += 1;
+    var probs = votes.map(function (x) { return x / K; }), best = probs.indexOf(Math.max.apply(null, probs));
+    return { probs: probs, best: best };
+  }
+  function predict() {
+    if (!trained || !video.videoWidth) return null;
+    if (useTF) {
+      return tf.tidy(function () {
+        var f = feat(video); var p = head.predict(f.expandDims(0)).dataSync();
+        var arr = Array.from(p); return { probs: arr, best: arr.indexOf(Math.max.apply(null, arr)) };
+      });
+    }
+    return knn(trained.X, trained.Y, feat(video), -1, trained.names.length);
+  }
+
+  // ---------------- ためす ----------------
+  function th() { return +$("th").value / 100; }
+  $("th").oninput = function () { $("thv").textContent = $("th").value; };
+  setInterval(function () {
+    if ($("test").classList.contains("hidden")) return;
+    var r = predict(); if (!r) return;
+    $("pred").innerHTML = trained.names.map(function (n, i) {
+      var p = Math.round(r.probs[i] * 100);
+      return '<div class="bar"><i style="width:' + p + "%;background:" + COLORS[i] + '"></i><b>' + esc(n) + "</b><span>" + p + "%</span></div>";
+    }).join("");
+    var top = r.probs[r.best];
+    $("advice").textContent = top < th() ? "AIは迷っています（" + Math.round(top * 100) + "%）。「もう一度見せて」" : "AIの答え：" + trained.names[r.best] + "（" + Math.round(top * 100) + "%）";
+  }, 250);
+
+  // ---------------- AIじゃんけん ----------------
+  var rule = "random", score = { w: 0, l: 0, d: 0 }, HAND = { "グー": "✊", "チョキ": "✌️", "パー": "🖐️" };
+  var BEAT = { "グー": "パー", "チョキ": "グー", "パー": "チョキ" };   // 〜に勝つ手
+  var LOSE = { "グー": "チョキ", "チョキ": "パー", "パー": "グー" };   // 〜に負ける手
+  Array.prototype.forEach.call(document.querySelectorAll("#rules button"), function (b) {
+    b.onclick = function () { rule = b.getAttribute("data-r"); Array.prototype.forEach.call(document.querySelectorAll("#rules button"), function (x) { x.classList.toggle("sel", x === b); }); };
+  });
+  $("pon").onclick = function () {
+    if (!trained) { $("result").textContent = "先に、グー・チョキ・パーを学習させてね"; return; }
+    if (!["グー", "チョキ", "パー"].every(function (n) { return trained.names.indexOf(n) >= 0; })) { $("result").textContent = "クラスの名前を グー・チョキ・パー にしてね"; return; }
+    $("pon").disabled = true; $("count").classList.remove("hidden");
+    var words = ["じゃん", "けん", "ポン！"], i = 0;
+    (function tick() {
+      $("count").textContent = words[i];
+      if (++i < words.length) { setTimeout(tick, 600); return; }
+      setTimeout(function () {
+        var sum = trained.names.map(function () { return 0; });
+        for (var k = 0; k < 4; k++) { var r = predict(); r.probs.forEach(function (p, j) { sum[j] += p / 4; }); }
+        var best = sum.indexOf(Math.max.apply(null, sum)), conf = sum[best], you = trained.names[best];
+        $("count").classList.add("hidden"); $("pon").disabled = false;
+        if (conf < th() || !HAND[you]) { $("you").textContent = "？"; $("cpu").textContent = "？"; $("result").textContent = "もう一度見せて（AIの自信 " + Math.round(conf * 100) + "%）"; return; }
+        var opts = ["グー", "チョキ", "パー"], cpu = rule === "win" ? BEAT[you] : rule === "lose" ? LOSE[you] : opts[Math.floor(Math.random() * 3)];
+        $("you").innerHTML = HAND[you] + '<div class="muted" style="font-size:18px">' + you + "</div>"; $("cpu").innerHTML = HAND[cpu] + '<div class="muted" style="font-size:18px">' + cpu + "</div>";
+        var res = you === cpu ? "d" : (BEAT[cpu] === you ? "w" : "l");
+        score[res]++;
+        $("result").textContent = res === "w" ? "あなたの勝ち！" : res === "l" ? "あなたの負け…" : "あいこ";
+        $("score").textContent = "かち " + score.w + " ／ まけ " + score.l + " ／ あいこ " + score.d;
+      }, 200);
+    })();
+  };
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ミニ生成AI（先生の画面）</title>
+<link rel="stylesheet" href="../../common/style.css">
+<style>
+  .tabs { max-width: 1280px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 300px; gap: 16px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  .list { max-height: 60vh; overflow: auto; }
+  .list div { display: flex; gap: 10px; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--rule); font-size: 22px; }
+  .list div span { flex: 1; }
+  .list button { min-height: 36px; font-size: 14px; padding: 4px 10px; }
+  .gen { font-size: 34px; font-weight: 800; background: var(--amb-t); border-radius: 14px; padding: 20px; min-height: 100px; }
+  .gen .w { display: inline-block; margin-right: 10px; animation: pop .3s ease-out both; }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 22px; }
+  .tbl td { padding: 6px 8px; border-bottom: 1px solid var(--rule); }
+  .tbl td.n { width: 120px; text-align: right; }
+  textarea { font-size: 18px; min-height: 260px; }
+  .usor { padding: 10px 0; border-bottom: 1px solid var(--rule); }
+  .usor .s { font-size: 24px; font-weight: 700; }
+  .usor .bars2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+  .bar.t > i { background: var(--mint); } .bar.f > i { background: var(--coral); }
+  .reasons { font-size: 16px; color: var(--sub); }
+</style>
+</head>
+<body class="screen">
+<header class="app"><h1>ミニ生成AI（先生の画面）</h1><span class="tag" id="cnt">クラスの文：0</span></header>
+<nav class="tabs">
+  <button data-tab="t1" class="on">集まった文</button>
+  <button data-tab="t2">つながり表</button>
+  <button data-tab="t3">文を作る</button>
+  <button data-tab="t4">面白い文</button>
+  <button data-tab="t5">ウソ探し</button>
+</nav>
+<main class="wide">
+  <div class="grid2">
+    <div>
+      <section id="t1" class="card">
+        <h2>集まった文（新しい順）</h2>
+        <p class="muted">ふさわしくない文は「かくす」で表から外せます（先生用の番号が要ります）。</p>
+        <div class="list" id="sents"></div>
+        <div class="row" style="margin-top:10px"><button class="ghost" id="seed">見本の文を入れる</button><button class="ghost" id="clear">集めた文をすべて消す</button></div>
+      </section>
+      <section id="t2" class="card hidden">
+        <h2>言葉の「つながり表」</h2>
+        <div class="row"><select id="ctx" class="grow"></select></div>
+        <table class="tbl" id="tbl" style="margin-top:10px"></table>
+      </section>
+      <section id="t3" class="card hidden">
+        <h2>クラス全員の文で、文を作る</h2>
+        <div class="row"><select id="st" class="grow"></select><select id="kk" style="width:140px"><option value="1">前の1語</option><option value="2" selected>前の2語</option><option value="3">前の3語</option></select></div>
+        <div style="height:12px"></div>
+        <div class="gen" id="gen">「文を作る！」を押そう</div>
+        <div style="height:12px"></div>
+        <button class="big amb" id="go">文を作る！</button>
+      </section>
+      <section id="t4" class="card hidden">
+        <h2>生徒が送った「面白い文」</h2>
+        <div class="list" id="funs"></div>
+      </section>
+      <section id="t5" class="card hidden">
+        <h2>ウソ探しの文を出す</h2>
+        <p class="muted">1行に1文。「クラスの文から作る」で、ミニ生成AIが作った文が入ります。正しい文も混ぜましょう。</p>
+        <textarea id="usoin"></textarea>
+        <div class="row" style="margin-top:8px"><button class="ghost" id="usogen">クラスの文から作る（10文）</button><button class="coral" id="usosend">生徒に出す</button></div>
+        <h2 style="margin-top:16px">みんなの判定</h2>
+        <div id="usores" class="muted">まだ出していません。</div>
+      </section>
+    </div>
+    <aside class="card" style="text-align:center">
+      <div class="qrbox"><canvas id="qr"></canvas></div>
+      <p class="muted">生徒はここから</p>
+      <p class="note" style="text-align:left">集めた文は講座の集計だけに使い、講座のあとでスプレッドシートから消します。</p>
+    </aside>
+  </div>
+</main>
+<script src="../../common/config.js"></script>
+<script src="../../common/api.js"></script>
+<script src="../../common/qrcode.js"></script>
+<script src="model.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var qs = new URLSearchParams(location.search);
+  var rows = [], model = MiniGPT.build([]);
+  var stu = new URL("index.html", location.href);
+  ["room", "api"].forEach(function (k) { if (qs.get(k)) stu.searchParams.set(k, qs.get(k)); });
+  drawQR($("qr"), stu.href, 240);
+
+  Array.prototype.forEach.call(document.querySelectorAll(".tabs button"), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".tabs button"), function (x) { x.classList.toggle("on", x === b); });
+      ["t1", "t2", "t3", "t4", "t5"].forEach(function (t) { $(t).classList.toggle("hidden", t !== b.getAttribute("data-tab")); });
+    };
+  });
+
+  function sentences() { return rows.map(function (r) { return r.value; }); }
+  function refresh() {
+    model = MiniGPT.build(sentences());
+    $("cnt").textContent = "クラスの文：" + rows.length;
+    $("sents").innerHTML = rows.slice().reverse().map(function (r) { return '<div><span>' + esc(r.value) + '</span><button class="ghost" data-id="' + r.id + '">かくす</button></div>'; }).join("") || "<div class='muted'>まだありません</div>";
+    Array.prototype.forEach.call($("sents").querySelectorAll("button"), function (b) {
+      b.onclick = function () { KozaAPI.hide("mg_sent", b.getAttribute("data-id"), teacherPin()).then(function (j) { if (j && j.ok === false) alert("番号がちがいます"); }); };
+    });
+    // つながり表の候補
+    var keep = $("ctx").value, ctxs = [];
+    [2, 1].forEach(function (n) { Object.keys(model.table[n]).forEach(function (c) { if (c.indexOf(MiniGPT.BOS) < 0) ctxs.push(c); }); });
+    ctxs.sort(function (a, b) { return Object.keys(model.table[b.split(" ").length][b]).length - Object.keys(model.table[a.split(" ").length][a]).length; });
+    $("ctx").innerHTML = ctxs.slice(0, 60).map(function (c) { return "<option>" + esc(c) + "</option>"; }).join("");
+    if (keep) $("ctx").value = keep;
+    showCtx();
+    var sk = $("st").value;
+    $("st").innerHTML = '<option value="">（おまかせ）</option>' + MiniGPT.startList(model, 40).map(function (s) { return "<option>" + esc(s) + "</option>"; }).join("");
+    if (sk) $("st").value = sk;
+  }
+  function showCtx() {
+    var c = $("ctx").value; if (!c) { $("tbl").innerHTML = ""; return; }
+    var row = model.table[c.split(" ").length][c], list = MiniGPT.rowList(row), tot = list.reduce(function (s, r) { return s + r[1]; }, 0);
+    $("tbl").innerHTML = "<tr><td colspan=3 class='muted'>「" + esc(c) + "」の次に来た言葉</td></tr>" + list.map(function (r) {
+      var p = Math.round(r[1] * 100 / tot);
+      return "<tr><td><b>" + esc(r[0]) + "</b></td><td><div class='bar'><i style='width:" + p + "%'></i></div></td><td class='n'>" + r[1] + "回 " + p + "%</td></tr>";
+    }).join("");
+  }
+  $("ctx").onchange = showCtx;
+  KozaAPI.poll("mg_sent", function (r) { rows = r; refresh(); }, 3000);
+  KozaAPI.poll("mg_fun", function (r) {
+    $("funs").innerHTML = r.slice().reverse().map(function (x) { return "<div><span>" + esc(x.value) + "</span></div>"; }).join("") || "<div class='muted'>まだありません</div>";
+  }, 3000);
+
+  $("seed").onclick = function () {
+    if (!confirm("見本の文を" + MINIGPT_SAMPLES.length + "文入れます。よいですか？")) return;
+    MINIGPT_SAMPLES.reduce(function (p, s) { return p.then(function () { return KozaAPI.put("mg_sent", s); }); }, Promise.resolve());
+  };
+  $("clear").onclick = function () {
+    if (!confirm("集めた文をすべて消します（スプレッドシートの記録は残り、表からだけ消えます）。よいですか？")) return;
+    KozaAPI.reset("mg_sent", teacherPin()).then(function (j) { if (j && j.ok === false) alert("番号がちがいます"); });
+  };
+  $("go").onclick = function () {
+    if (rows.length < 2) { $("gen").textContent = "文がまだ少ないです"; return; }
+    var g = MiniGPT.generate(model, $("st").value, +$("kk").value);
+    var el = $("gen"); el.innerHTML = "";
+    g.words.concat([MiniGPT.EOS]).forEach(function (w, i) { setTimeout(function () { var s = document.createElement("span"); s.className = "w"; s.textContent = w; el.appendChild(s); }, i * 220); });
+  };
+
+  // ウソ探し
+  $("usoin").value = ["高専 は 5年間 学ぶ 学校 です", "名古屋 は 愛知県 の 市 です", "名古屋 は 5年間 学ぶ 学校 です"].join("\n");
+  $("usogen").onclick = function () {
+    if (rows.length < 2) { alert("クラスの文がまだ少ないです"); return; }
+    var out = {}, tries = 0;
+    while (Object.keys(out).length < 10 && tries++ < 300) { out[MiniGPT.generate(model, "", 1).text.replace(/。$/, "")] = 1; }
+    var keep = $("usoin").value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
+    $("usoin").value = keep.concat(Object.keys(out)).slice(0, 13).join("\n");
+  };
+  var stopUso = null;
+  $("usosend").onclick = function () {
+    var list = $("usoin").value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean).slice(0, 15);
+    if (!list.length) return;
+    KozaAPI.put("mg_usolist", list).then(function (j) {
+      var id = j.id; if (stopUso) stopUso();
+      stopUso = KozaAPI.poll("mg_uso_" + id, function (r) { showUso(list, r); }, 2500);
+    });
+  };
+  function showUso(list, r) {
+    var last = {}; r.forEach(function (x) { var v = KozaAPI.parse(x.value, {}); last[x.client + "_" + v.i] = v; });
+    var stat = list.map(function () { return { t: 0, f: 0, rs: {} }; });
+    Object.keys(last).forEach(function (k) { var v = last[k]; var s = stat[v.i]; if (!s) return; s[v.j]++; if (v.j === "f" && v.r) s.rs[v.r] = (s.rs[v.r] || 0) + 1; });
+    $("usores").className = "";
+    $("usores").innerHTML = list.map(function (txt, i) {
+      var s = stat[i], tot = s.t + s.f, pt = tot ? Math.round(s.t * 100 / tot) : 0, pf = tot ? 100 - pt : 0;
+      var rs = Object.keys(s.rs).map(function (k) { return k + "（" + s.rs[k] + "）"; }).join("　");
+      return '<div class="usor"><div class="s">' + (i + 1) + ". " + esc(txt) + '</div><div class="bars2"><div class="bar t"><i style="width:' + pt + '%"></i><b>ほんとう</b><span>' + s.t + '人</span></div><div class="bar f"><i style="width:' + pf + '%"></i><b>ウソ</b><span>' + s.f + "人</span></div></div>" + (rs ? '<div class="reasons">理由：' + esc(rs) + "</div>" : "") + "</div>";
+    }).join("");
+  }
+  // 開いたときに、最後に出したウソ探しを表示する
+  KozaAPI.latest("mg_usolist").then(function (last) {
+    if (!last) return; var list = KozaAPI.parse(last.value, []);
+    $("usoin").value = list.join("\n");
+    stopUso = KozaAPI.poll("mg_uso_" + last.id, function (r) { showUso(list, r); }, 2500);
+  }).catch(function () {});
+})();
+</script>
+</body>
+</html>

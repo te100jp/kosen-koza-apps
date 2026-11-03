@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ミニ生成AI</title>
+<link rel="stylesheet" href="../../common/style.css">
+<style>
+  .gen { font-size: 22px; font-weight: 700; background: var(--amb-t); border-radius: 12px; padding: 16px; min-height: 80px; letter-spacing: .02em; }
+  .gen .w { display: inline-block; animation: pop .25s ease-out both; margin-right: 6px; }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .hist div { padding: 8px 10px; border-bottom: 1px solid var(--rule); display: flex; gap: 8px; align-items: center; }
+  .hist div span { flex: 1; }
+  .hist button { min-height: 36px; padding: 4px 10px; font-size: 13px; }
+  .topic button { font-size: 14px; min-height: 40px; padding: 6px 10px; }
+  .mylist div { padding: 6px 0; border-bottom: 1px dashed var(--rule); }
+  .seg { display: flex; gap: 6px; }
+  .seg button { flex: 1; font-size: 14px; min-height: 42px; padding: 4px; background: #fff; color: var(--pur); border: 2px solid var(--rule); }
+  .seg button.on { background: var(--pur); color: #fff; border-color: var(--pur); }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .tbl td { padding: 4px 6px; border-bottom: 1px solid var(--rule); }
+  .uso { border-bottom: 1px solid var(--rule); padding: 10px 0; }
+  .uso .s { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .uso .row button { min-height: 40px; font-size: 15px; padding: 6px 12px; }
+  .uso select { font-size: 15px; padding: 6px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<header class="app"><h1>ミニ生成AI</h1><span class="tag" id="cnt">クラスの文：0</span></header>
+<nav class="tabs">
+  <button data-tab="collect" class="on">① 文を集める</button>
+  <button data-tab="make">② 文を作る</button>
+  <button data-tab="bias">③ かたよりモード</button>
+  <button data-tab="uso">④ ウソ探し</button>
+</nav>
+<main>
+  <!-- ① 文を集める -->
+  <section id="collect">
+    <div class="card">
+      <h2>文を書いて、クラスの表に入れよう</h2>
+      <p class="muted">言葉の間に<b>空白</b>を入れて書きます。名前・学校名・住所は書きません。</p>
+      <div class="row topic" style="margin-bottom:8px">
+        <button class="ghost" data-t="わたし は ">好きな食べ物</button>
+        <button class="ghost" data-t="休み の 日 は ">休みの日</button>
+        <button class="ghost" data-t="将来 は ">やってみたいこと</button>
+      </div>
+      <input type="text" id="sin" placeholder="例：わたし は カレー が 好き です" maxlength="60" autocomplete="off">
+      <p id="smsg" class="muted"></p>
+      <button class="big" id="send">送る（クラスの表に入る）</button>
+    </div>
+    <div class="card">
+      <h2>自分たちが送った文</h2>
+      <div id="mylist" class="mylist muted">まだありません。2人で5文ずつ書こう。</div>
+    </div>
+  </section>
+
+  <!-- ② 文を作る -->
+  <section id="make" class="hidden">
+    <div class="card">
+      <h2>ミニ生成AIに文を作らせよう</h2>
+      <p class="muted">学ぶ文</p>
+      <div class="seg" id="src"><button class="on" data-v="all">クラス全員の文</button><button data-v="mine">自分たちの文だけ</button></div>
+      <p class="muted" style="margin-top:10px">前の言葉を何語見る？</p>
+      <div class="seg" id="kk"><button data-v="1">1語</button><button class="on" data-v="2">2語</button><button data-v="3">3語</button></div>
+      <p class="muted" style="margin-top:10px">最初の言葉</p>
+      <select id="start"></select>
+      <div style="height:10px"></div>
+      <div class="gen" id="gen">「文を作る！」をタップしよう</div>
+      <div style="height:10px"></div>
+      <button class="big amb" id="go">文を作る！</button>
+      <p class="muted">タップするたびに、ちがう文ができます。いちばん面白い文を「先生に送る」で送ろう。</p>
+    </div>
+    <div class="card">
+      <h2>つながり表（いまの最初の言葉の次）</h2>
+      <table class="tbl" id="tbl"></table>
+    </div>
+    <div class="card"><h2>作った文</h2><div class="hist" id="hist"></div></div>
+  </section>
+
+  <!-- ③ かたよりモード -->
+  <section id="bias" class="hidden">
+    <div class="card">
+      <h2>わざと、かたよったデータで学ばせよう</h2>
+      <p class="muted">ふくむ言葉の文だけで、つながり表を作り直します。</p>
+      <div class="row"><input type="text" id="kw" value="カレー" class="grow" style="width:auto"><span class="muted" id="bcnt"></span></div>
+      <p class="muted" style="margin-top:10px">最初の言葉（ほかの話から始めてみよう）</p>
+      <select id="bstart"></select>
+      <div style="height:10px"></div>
+      <div class="gen" id="bgen">「かたよったAIで作る」をタップしよう</div>
+      <div style="height:10px"></div>
+      <button class="big coral" id="bgo">かたよったAIで作る</button>
+      <p class="note">何を始めても、同じような話になるかな？　かたよったデータで学ぶと、かたよった答えしか出ません。</p>
+    </div>
+  </section>
+
+  <!-- ④ ウソ探し -->
+  <section id="uso" class="hidden">
+    <div class="card">
+      <h2>ウソ探し：ほんとう？ ウソ？</h2>
+      <p class="muted">ミニ生成AIが作った文です。1文ずつ判定しよう。ウソだと思ったら、理由も選ぼう。</p>
+      <div id="usolist" class="muted">先生が文を出すまで待ってね。</div>
+    </div>
+  </section>
+</main>
+<footer class="app">入力した文は、講座の集計だけに使い、講座のあとで消します。</footer>
+<script src="../../common/config.js"></script>
+<script src="../../common/api.js"></script>
+<script src="model.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var all = [], mine = [], useSrc = "all", K = 2, history = [];
+  try { mine = JSON.parse(localStorage.getItem("mg_mine_" + KozaAPI.room) || "[]"); } catch (e) {}
+
+  // タブ
+  Array.prototype.forEach.call(document.querySelectorAll(".tabs button"), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".tabs button"), function (x) { x.classList.toggle("on", x === b); });
+      ["collect", "make", "bias", "uso"].forEach(function (t) { $(t).classList.toggle("hidden", t !== b.getAttribute("data-tab")); });
+      if (b.getAttribute("data-tab") !== "collect") refreshStarts();
+    };
+  });
+  function seg(id, fn) {
+    Array.prototype.forEach.call($(id).querySelectorAll("button"), function (b) {
+      b.onclick = function () { Array.prototype.forEach.call($(id).querySelectorAll("button"), function (x) { x.classList.toggle("on", x === b); }); fn(b.getAttribute("data-v")); };
+    });
+  }
+  seg("src", function (v) { useSrc = v; refreshStarts(); });
+  seg("kk", function (v) { K = +v; });
+
+  // ① 文を集める
+  Array.prototype.forEach.call(document.querySelectorAll(".topic button"), function (b) {
+    b.onclick = function () { $("sin").value = b.getAttribute("data-t"); $("sin").focus(); };
+  });
+  function renderMine() {
+    $("mylist").innerHTML = mine.length ? mine.map(function (s) { return "<div>" + esc(s) + "</div>"; }).join("") : "まだありません。2人で5文ずつ書こう。";
+  }
+  $("send").onclick = function () {
+    var s = $("sin").value.replace(/\s+/g, " ").trim();
+    var t = MiniGPT.tokenize(s);
+    if (t.length < 3) { $("smsg").className = "warn"; $("smsg").textContent = "言葉の間に空白を入れて、2語以上で書こう（例：わたし は カレー が 好き です）"; return; }
+    $("send").disabled = true;
+    KozaAPI.put("mg_sent", s).then(function () {
+      mine.push(s); try { localStorage.setItem("mg_mine_" + KozaAPI.room, JSON.stringify(mine)); } catch (e) {}
+      renderMine(); $("sin").value = ""; $("smsg").className = "ok"; $("smsg").textContent = "送りました！ " + mine.length + "文目";
+    }).catch(function () { $("smsg").className = "warn"; $("smsg").textContent = "送れませんでした。もう一度送ってください。"; })
+      .then(function () { $("send").disabled = false; });
+  };
+  renderMine();
+
+  // クラスの文を取りに行く
+  KozaAPI.poll("mg_sent", function (rows) {
+    all = rows.map(function (r) { return r.value; });
+    $("cnt").textContent = "クラスの文：" + all.length;
+  }, 4000);
+
+  function data() { return useSrc === "mine" ? mine : all; }
+  function fillStarts(sel, model) {
+    var keep = sel.value;
+    var list = MiniGPT.startList(model, 40);
+    sel.innerHTML = '<option value="">（おまかせ）</option>' + list.map(function (s) { return '<option>' + esc(s) + "</option>"; }).join("");
+    if (keep && list.indexOf(keep) >= 0) sel.value = keep;
+  }
+  function refreshStarts() {
+    fillStarts($("start"), MiniGPT.build(data()));
+    fillStarts($("bstart"), MiniGPT.build(all));
+    showTable();
+  }
+  function showTable() {
+    var m = MiniGPT.build(data()), st = $("start").value;
+    var seq = [MiniGPT.BOS, MiniGPT.BOS, MiniGPT.BOS].concat(st ? st.split(" ") : []);
+    var nr = MiniGPT.nextRow(m, seq, K);
+    var rows = MiniGPT.rowList(nr.row).slice(0, 8), tot = rows.reduce(function (s, r) { return s + r[1]; }, 0);
+    $("tbl").innerHTML = rows.length ? "<tr><td colspan=3 class='muted'>「" + esc(st || "文のはじめ") + "」の次に来た言葉</td></tr>" + rows.map(function (r) {
+      return "<tr><td><b>" + esc(r[0]) + "</b></td><td>" + r[1] + "回</td><td>" + Math.round(r[1] * 100 / tot) + "%</td></tr>";
+    }).join("") : "<tr><td class='muted'>まだ文がありません</td></tr>";
+  }
+  $("start").onchange = showTable;
+
+  function animate(el, words) {
+    el.innerHTML = "";
+    words.forEach(function (w, i) {
+      setTimeout(function () { var s = document.createElement("span"); s.className = "w"; s.textContent = w; el.appendChild(s); }, i * 180);
+    });
+  }
+  // ② 文を作る
+  $("go").onclick = function () {
+    var d = data();
+    if (d.length < 2) { $("gen").textContent = useSrc === "mine" ? "自分たちの文が少なすぎます。①で文を送ろう。" : "クラスの文がまだ少ないです。少し待ってね。"; return; }
+    var g = MiniGPT.generate(MiniGPT.build(d), $("start").value, K);
+    animate($("gen"), g.words.concat([MiniGPT.EOS]));
+    history.unshift(g.text); history = history.slice(0, 12);
+    $("hist").innerHTML = history.map(function (t, i) { return '<div><span>' + esc(t) + '</span><button class="ghost" data-i="' + i + '">先生に送る</button></div>'; }).join("");
+    Array.prototype.forEach.call($("hist").querySelectorAll("button"), function (b) {
+      b.onclick = function () { KozaAPI.put("mg_fun", history[+b.getAttribute("data-i")]).then(function () { b.textContent = "送った ✓"; b.disabled = true; }); };
+    });
+    showTable();
+  };
+  // ③ かたよりモード
+  function biased() { var kw = $("kw").value.trim(); return all.filter(function (s) { return kw && s.indexOf(kw) >= 0; }); }
+  $("kw").oninput = function () { $("bcnt").textContent = biased().length + "文"; };
+  $("bgo").onclick = function () {
+    var d = biased(); $("bcnt").textContent = d.length + "文";
+    if (!d.length) { $("bgen").textContent = "その言葉をふくむ文がありません。"; return; }
+    var g = MiniGPT.generate(MiniGPT.build(d), $("bstart").value, 2);
+    animate($("bgen"), g.words.concat([MiniGPT.EOS]));
+  };
+
+  // ④ ウソ探し
+  var usoKey = null, myJudge = {};
+  KozaAPI.poll("mg_usolist", function (rows) {
+    var last = rows.length ? rows[rows.length - 1] : null;
+    if (!last) return;
+    if (usoKey === last.id) return;
+    usoKey = last.id;
+    var list = KozaAPI.parse(last.value, []);
+    try { myJudge = JSON.parse(localStorage.getItem("mg_uso_" + usoKey) || "{}"); } catch (e) { myJudge = {}; }
+    $("usolist").className = "";
+    $("usolist").innerHTML = list.map(function (s, i) {
+      return '<div class="uso" data-i="' + i + '"><div class="s">' + (i + 1) + ". " + esc(s) + '</div><div class="row"><button class="mint" data-j="t">ほんとう</button><button class="coral" data-j="f">ウソ</button></div>' +
+        '<select class="hidden"><option value="">ウソの理由を選ぶ</option><option>知っていることとちがう</option><option>ほかの文とむじゅんする</option><option>意味が通らない</option><option>その他</option></select></div>';
+    }).join("");
+    Array.prototype.forEach.call($("usolist").querySelectorAll(".uso"), function (box) {
+      var i = +box.getAttribute("data-i"), sel = box.querySelector("select");
+      function mark() { var j = myJudge[i]; Array.prototype.forEach.call(box.querySelectorAll("button"), function (b) { b.classList.toggle("sel", !!(j && b.getAttribute("data-j") === j.j)); }); sel.classList.toggle("hidden", !(j && j.j === "f")); if (j && j.r) sel.value = j.r; }
+      function send() { try { localStorage.setItem("mg_uso_" + usoKey, JSON.stringify(myJudge)); } catch (e) {} KozaAPI.put("mg_uso_" + usoKey, { i: i, j: myJudge[i].j, r: myJudge[i].r || "" }); }
+      Array.prototype.forEach.call(box.querySelectorAll("button"), function (b) { b.onclick = function () { myJudge[i] = { j: b.getAttribute("data-j"), r: (myJudge[i] || {}).r }; mark(); send(); }; });
+      sel.onchange = function () { if (myJudge[i]) { myJudge[i].r = sel.value; send(); } };
+      mark();
+    });
+  }, 4000);
+})();
+</script>
+</body>
+</html>

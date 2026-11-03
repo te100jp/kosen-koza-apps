@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>サウンドラボ</title>
+<link rel="stylesheet" href="../../common/style.css">
+<style>
+  canvas.wave { width: 100%; height: 180px; background: #fff; border: 1px solid var(--rule); border-radius: 12px; display: block; }
+  .nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; margin-top: 10px; }
+  .nums div { background: var(--pur-t); border-radius: 10px; padding: 8px 4px; }
+  .nums b { display: block; font-size: 24px; }
+  .nums small { color: var(--sub); }
+  #game { width: 100%; aspect-ratio: 16/10; background: #F4F2FA; border-radius: 12px; display: block; border: 1px solid var(--rule); }
+  .meter { position: relative; height: 26px; background: var(--pur-t); border-radius: 8px; overflow: hidden; margin: 6px 0; }
+  .meter i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--amb); }
+  .meter u { position: absolute; top: 0; bottom: 0; width: 4px; background: var(--coral); }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg button { font-size: 14px; min-height: 40px; padding: 6px 10px; background: #fff; color: var(--pur); border: 2px solid var(--rule); }
+  .seg button.on { background: var(--pur); color: #fff; border-color: var(--pur); }
+  #hand { width: 100%; aspect-ratio: 4/3; border-radius: 12px; background: #111; display: block; touch-action: none; }
+  .samples { font-family: ui-monospace, monospace; font-size: 14px; word-break: break-all; background: var(--pur-t); border-radius: 10px; padding: 8px; }
+</style>
+</head>
+<body>
+<header class="app"><h1>サウンドラボ</h1><span class="tag">音を見よう、音で動かそう</span></header>
+<nav class="tabs">
+  <button data-tab="see" class="on">① 音を見る</button>
+  <button data-tab="data">② 音はデータ</button>
+  <button data-tab="jump">③ 声でジャンプ</button>
+  <button data-tab="synth">④ ハンドシンセ</button>
+</nav>
+<main>
+  <div class="card" id="micbox">
+    <p>マイクで声や音を「波」にして見ます。<b>声は録音せず、どこにも送りません。</b></p>
+    <button class="big" id="mic">はじめる（マイクを使う）</button>
+    <p id="merr" class="warn hidden"></p>
+  </div>
+
+  <section id="see">
+    <div class="card">
+      <h2>声を「波」で見よう</h2>
+      <canvas class="wave" id="wave" width="700" height="180"></canvas>
+      <div class="nums"><div><small>大きさ</small><b id="vol">0</b></div><div><small>高さ（1秒にふるえる回数）</small><b id="hz">−</b></div><div><small>音名</small><b id="note">−</b></div></div>
+      <div class="row" style="margin-top:10px"><button class="ghost" id="freeze">波を止める</button><button class="ghost" id="resetrec">記録を消す</button></div>
+      <p class="muted" id="rec">いちばん高い声：− ／ いちばん低い声：−</p>
+      <p class="note">音さがしゲーム：いちばん高い声、いちばん低い声、手拍子・口笛・ペンで机をたたく音。波はどう変わるかな？</p>
+    </div>
+  </section>
+
+  <section id="data" class="hidden">
+    <div class="card">
+      <h2>音の波を、数字にする（サンプリング）</h2>
+      <canvas class="wave" id="samp" width="700" height="180"></canvas>
+      <div class="row" style="margin-top:8px"><span class="muted">測る回数</span><input type="range" id="rate" min="4" max="64" value="16" class="grow"><b id="ratev">16</b></div>
+      <p class="muted">点が「測ったところ」、オレンジの線が数字からもどした音です。測る回数が少ないと、もとの波とずれます。</p>
+      <div class="samples" id="sv"></div>
+      <div class="row" style="margin-top:8px"><button class="ghost" id="usemine">いまの声の波を使う</button><button class="ghost" id="usesine">きれいな波にもどす</button><button class="ghost" id="tone">ラ（440Hz）を鳴らす</button></div>
+      <p class="note">音楽CDは、1秒に44,100回 測って数字にしています。</p>
+    </div>
+  </section>
+
+  <section id="jump" class="hidden">
+    <div class="card">
+      <h2>声でジャンプ！</h2>
+      <canvas id="game" width="640" height="400"></canvas>
+      <div class="meter"><i id="gvol"></i><u id="gth"></u></div>
+      <div class="row"><span class="muted">しきい値</span><input type="range" id="th" min="5" max="95" value="40" class="grow"><b id="thv">40</b></div>
+      <div class="seg" id="gmode" style="margin:6px 0">
+        <button class="on" data-m="loud">声の大きさでジャンプ</button><button data-m="long">長くのばすと高くとぶ</button><button data-m="pitch">高さで上下に動く</button>
+      </div>
+      <div class="row"><button class="big mint grow" id="gstart">スタート（30秒）</button></div>
+      <p class="muted" id="gmsg">もし 声の大きさが しきい値より大きいなら、ジャンプ。これが「もし〜なら」です。</p>
+      <p class="note">大声を出しすぎない。声が苦手な人は、手拍子や指を鳴らす音でもOK。</p>
+    </div>
+  </section>
+
+  <section id="synth" class="hidden">
+    <div class="card">
+      <h2>ハンドシンセ：手の高さで音を出す</h2>
+      <canvas id="hand" width="640" height="480"></canvas>
+      <div class="row" style="margin-top:8px"><button class="coral grow" id="hstart">カメラで手を見つける</button><button class="ghost" id="hstop">止める</button></div>
+      <div class="seg" style="margin-top:8px" id="scale"><button class="on" data-s="8">ドレミファソラシド</button><button data-s="5">5つの音（ドレミソラ）</button></div>
+      <p class="muted" id="hmsg">カメラには手だけを映そう（顔は映さない）。映像は保存しません。カメラが使えないときは、画面を指でなぞっても音が出ます。</p>
+    </div>
+  </section>
+</main>
+<footer class="app">愛知県立高等専門学校 公開講座「使う人から作る人へ」 第5弾</footer>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var ctx = null, an = null, buf = null, fbuf = null, frozen = false, level = 0, pitch = 0, hi = 0, lo = 0;
+
+  Array.prototype.forEach.call(document.querySelectorAll(".tabs button"), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".tabs button"), function (x) { x.classList.toggle("on", x === b); });
+      ["see", "data", "jump", "synth"].forEach(function (t) { $(t).classList.toggle("hidden", t !== b.getAttribute("data-tab")); });
+      $("micbox").classList.toggle("hidden", b.getAttribute("data-tab") === "synth" || !!an);
+    };
+  });
+  function audio() { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state === "suspended") ctx.resume(); return ctx; }
+
+  // ---------------- マイク ----------------
+  $("mic").onclick = function () {
+    audio();
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(function (s) {
+      var src = ctx.createMediaStreamSource(s); an = ctx.createAnalyser(); an.fftSize = 2048; src.connect(an);
+      buf = new Float32Array(an.fftSize); $("micbox").classList.add("hidden"); loop();
+    }).catch(function (e) { $("merr").classList.remove("hidden"); $("merr").textContent = "マイクが使えません。ブラウザの設定でマイクを「許可」にしてね。（" + (e && e.name || e) + "）"; });
+  };
+  var NOTE = ["ド", "ド#", "レ", "レ#", "ミ", "ファ", "ファ#", "ソ", "ソ#", "ラ", "ラ#", "シ"];
+  function noteName(f) { var n = Math.round(12 * Math.log2(f / 440)) + 69; return NOTE[(n % 12 + 12) % 12] + (Math.floor(n / 12) - 1); }
+  function autoPitch(b, sr) {    // 自己相関で、くり返しの長さ（周期）を探す
+    var n = b.length, rms = 0; for (var i = 0; i < n; i++) rms += b[i] * b[i]; rms = Math.sqrt(rms / n); if (rms < 0.015) return 0;
+    var best = 0, bestc = 0, minL = Math.floor(sr / 1100), maxL = Math.floor(sr / 70);
+    for (var L = minL; L < maxL; L++) { var c = 0; for (var j = 0; j < n - L; j += 2) c += b[j] * b[j + L]; if (c > bestc) { bestc = c; best = L; } }
+    return best ? sr / best : 0;
+  }
+  function loop() {
+    requestAnimationFrame(loop);
+    if (!an) return;
+    an.getFloatTimeDomainData(buf);
+    var rms = 0; for (var i = 0; i < buf.length; i++) rms += buf[i] * buf[i]; rms = Math.sqrt(rms / buf.length);
+    level = Math.min(100, Math.round(rms * 400));
+    if (!frozen) { fbuf = buf.slice(0); drawWave($("wave"), fbuf); }
+    if (!$("see").classList.contains("hidden") || !$("jump").classList.contains("hidden")) pitch = autoPitch(buf, ctx.sampleRate);
+    $("vol").textContent = level;
+    if (pitch && level > 6) {
+      $("hz").textContent = Math.round(pitch) + "Hz"; $("note").textContent = noteName(pitch);
+      if (!hi || pitch > hi) hi = pitch; if (!lo || pitch < lo) lo = pitch;
+      $("rec").textContent = "いちばん高い声：" + Math.round(hi) + "Hz ／ いちばん低い声：" + Math.round(lo) + "Hz";
+    }
+    $("gvol").style.width = level + "%";
+  }
+  function drawWave(cv, b) {
+    var g = cv.getContext("2d"), W = cv.width, H = cv.height; g.clearRect(0, 0, W, H);
+    g.strokeStyle = "#D5D0E3"; g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke();
+    g.strokeStyle = "#2E9BD6"; g.lineWidth = 3; g.beginPath();
+    var step = Math.max(1, Math.floor(b.length / W / 0.6));
+    for (var x = 0; x < W; x++) { var v = b[Math.min(b.length - 1, x * step)] || 0, y = H / 2 - v * H * 1.6; if (x) g.lineTo(x, y); else g.moveTo(x, y); }
+    g.stroke();
+  }
+  $("freeze").onclick = function () { frozen = !frozen; this.textContent = frozen ? "波を動かす" : "波を止める"; };
+  $("resetrec").onclick = function () { hi = lo = 0; $("rec").textContent = "いちばん高い声：− ／ いちばん低い声：−"; };
+
+  // ---------------- サンプリング ----------------
+  var wave = null;
+  function sine() { var a = []; for (var i = 0; i < 700; i++) a.push(Math.sin(i / 700 * Math.PI * 4) * 0.8 + Math.sin(i / 700 * Math.PI * 10) * 0.15); return a; }
+  wave = sine();
+  function drawSamp() {
+    var cv = $("samp"), g = cv.getContext("2d"), W = cv.width, H = cv.height, n = +$("rate").value; $("ratev").textContent = n;
+    g.clearRect(0, 0, W, H);
+    g.strokeStyle = "#D5D0E3"; g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke();
+    g.strokeStyle = "#2E9BD6"; g.lineWidth = 2; g.beginPath(); wave.forEach(function (v, x) { var y = H / 2 - v * H * 0.45; if (x) g.lineTo(x, y); else g.moveTo(x, y); }); g.stroke();
+    var vals = [];
+    g.strokeStyle = "#E0A32E"; g.lineWidth = 3; g.beginPath();
+    for (var k = 0; k < n; k++) {
+      var x = Math.floor(k * W / n), v = wave[x], y = H / 2 - v * H * 0.45, x2 = Math.floor((k + 1) * W / n);
+      vals.push(Math.round(v * 100));
+      if (k) g.lineTo(x, y); else g.moveTo(x, y); g.lineTo(x2, y);
+    }
+    g.stroke();
+    g.fillStyle = "#EE6A5B"; for (k = 0; k < n; k++) { x = Math.floor(k * W / n); g.beginPath(); g.arc(x, H / 2 - wave[x] * H * 0.45, 5, 0, 7); g.fill(); }
+    $("sv").textContent = "数字のならび：" + vals.join(", ");
+  }
+  $("rate").oninput = drawSamp;
+  $("usesine").onclick = function () { wave = sine(); drawSamp(); };
+  $("usemine").onclick = function () {
+    if (!fbuf) { alert("先に「はじめる」でマイクを使ってね"); return; }
+    var m = 0; for (var i = 0; i < fbuf.length; i++) m = Math.max(m, Math.abs(fbuf[i])); m = m || 1;
+    wave = []; for (i = 0; i < 700; i++) wave.push(fbuf[Math.floor(i * fbuf.length / 700 / 3)] / m * 0.9); drawSamp();
+  };
+  $("tone").onclick = function () { var a = audio(), o = a.createOscillator(), gn = a.createGain(); o.frequency.value = 440; gn.gain.value = 0.15; o.connect(gn).connect(a.destination); o.start(); gn.gain.setTargetAtTime(0, a.currentTime + 0.9, 0.1); o.stop(a.currentTime + 1.3); };
+  drawSamp();
+
+  // ---------------- 声でジャンプ ----------------
+  var gc = $("game"), gg = gc.getContext("2d"), mode = "loud", game = null, hold = 0;
+  Array.prototype.forEach.call($("gmode").querySelectorAll("button"), function (b) {
+    b.onclick = function () { mode = b.getAttribute("data-m"); Array.prototype.forEach.call($("gmode").querySelectorAll("button"), function (x) { x.classList.toggle("on", x === b); });
+      $("gmsg").textContent = mode === "loud" ? "もし 声の大きさが しきい値より大きいなら、ジャンプ。" : mode === "long" ? "しきい値より大きい声を長くのばすほど、高くとぶ。" : "高い声で上へ、低い声で下へ。星を集めよう。"; };
+  });
+  function thv() { return +$("th").value; }
+  $("th").oninput = function () { $("thv").textContent = this.value; $("gth").style.left = this.value + "%"; };
+  $("gth").style.left = "40%";
+  $("gstart").onclick = function () {
+    if (!an) { alert("先に「はじめる」でマイクを使ってね"); return; }
+    game = { t0: performance.now(), y: 0, vy: 0, obs: [], stars: [], score: 0, hit: 0, last: performance.now(), next: 1.2, py: 0.5 };
+    requestAnimationFrame(gstep);
+  };
+  function gstep(now) {
+    if (!game) return;
+    var dt = Math.min(0.05, (now - game.last) / 1000); game.last = now; var t = (now - game.t0) / 1000, W = gc.width, H = gc.height, ground = H - 60;
+    var loud = level > thv();
+    if (mode === "loud") { if (loud && game.y === 0) game.vy = 520; }
+    else if (mode === "long") { if (loud && game.y === 0) hold += dt; if (!loud && hold > 0 && game.y === 0) { game.vy = 300 + Math.min(1.2, hold) * 500; hold = 0; } }
+    if (mode !== "pitch") {
+      game.vy -= 1300 * dt; game.y = Math.max(0, game.y + game.vy * dt); if (game.y === 0) game.vy = 0;
+      game.next -= dt; if (game.next <= 0) { game.obs.push({ x: W + 20, h: 30 + Math.random() * 40, passed: false }); game.next = 1.1 + Math.random() * 1.2; }
+      game.obs.forEach(function (o) { o.x -= 240 * dt; if (!o.passed && o.x < 80) { o.passed = true; if (game.y > o.h - 10) game.score++; else game.hit++; } });
+      game.obs = game.obs.filter(function (o) { return o.x > -40; });
+    } else {
+      if (pitch && level > 6) { var p = Math.max(0, Math.min(1, (Math.log2(pitch) - Math.log2(120)) / (Math.log2(700) - Math.log2(120)))); game.py += ((1 - p) - game.py) * 0.2; }
+      game.next -= dt; if (game.next <= 0) { game.stars.push({ x: W + 20, y: 40 + Math.random() * (H - 120) }); game.next = 0.9; }
+      game.stars.forEach(function (s) { s.x -= 200 * dt; if (!s.got && Math.abs(s.x - 100) < 24 && Math.abs(s.y - (40 + game.py * (H - 120))) < 30) { s.got = true; game.score++; } });
+      game.stars = game.stars.filter(function (s) { return s.x > -30 && !s.got; });
+    }
+    // 描く
+    gg.clearRect(0, 0, W, H); gg.fillStyle = "#E0F4EC"; gg.fillRect(0, ground, W, H - ground);
+    gg.fillStyle = "#3A247D"; gg.font = "bold 26px sans-serif"; gg.textAlign = "left"; gg.fillText("のこり " + Math.max(0, 30 - t).toFixed(0) + "秒　" + (mode === "pitch" ? "星 " : "こえた ") + game.score, 16, 36);
+    if (mode !== "pitch") {
+      gg.fillStyle = "#EE6A5B"; game.obs.forEach(function (o) { gg.fillRect(o.x, ground - o.h, 26, o.h); });
+      drawChara(100, ground - 28 - game.y);
+    } else {
+      gg.fillStyle = "#E0A32E"; game.stars.forEach(function (s) { star(s.x, s.y); });
+      drawChara(100, 40 + game.py * (H - 120));
+      gg.fillStyle = "#6B6480"; gg.font = "16px sans-serif"; gg.fillText("高い声 ↑", W - 110, 30); gg.fillText("低い声 ↓", W - 110, H - 70);
+    }
+    if (t >= 30) { gg.fillStyle = "rgba(255,255,255,.85)"; gg.fillRect(0, 0, W, H); gg.fillStyle = "#3A247D"; gg.textAlign = "center"; gg.font = "bold 40px sans-serif"; gg.fillText("おわり！ " + (mode === "pitch" ? "星 " : "こえた数 ") + game.score, W / 2, H / 2); game = null; return; }
+    requestAnimationFrame(gstep);
+  }
+  function drawChara(x, y) { gg.fillStyle = "#2E9BD6"; gg.beginPath(); gg.arc(x, y, 26, 0, 7); gg.fill(); gg.fillStyle = "#fff"; gg.beginPath(); gg.arc(x + 9, y - 6, 6, 0, 7); gg.fill(); gg.fillStyle = "#2B2140"; gg.beginPath(); gg.arc(x + 10, y - 6, 3, 0, 7); gg.fill(); }
+  function star(x, y) { gg.beginPath(); for (var i = 0; i < 10; i++) { var r = i % 2 ? 9 : 20, a = i * Math.PI / 5 - Math.PI / 2; gg.lineTo(x + r * Math.cos(a), y + r * Math.sin(a)); } gg.fill(); }
+
+  // ---------------- ハンドシンセ ----------------
+  var hc = $("hand"), hg = hc.getContext("2d"), hv = document.createElement("video"), hstream = null, lm = null, osc = null, gain = null, nsteps = 8, running = false, lastVideoTime = -1;
+  hv.setAttribute("playsinline", ""); hv.muted = true;
+  var SC8 = [261.6, 293.7, 329.6, 349.2, 392.0, 440.0, 493.9, 523.3], SC5 = [261.6, 293.7, 329.6, 392.0, 440.0];
+  var NM8 = ["ド", "レ", "ミ", "ファ", "ソ", "ラ", "シ", "ド"], NM5 = ["ド", "レ", "ミ", "ソ", "ラ"];
+  Array.prototype.forEach.call($("scale").querySelectorAll("button"), function (b) {
+    b.onclick = function () { nsteps = +b.getAttribute("data-s"); Array.prototype.forEach.call($("scale").querySelectorAll("button"), function (x) { x.classList.toggle("on", x === b); }); };
+  });
+  function voice(on, f, vol) {
+    var a = audio();
+    if (!osc) { osc = a.createOscillator(); gain = a.createGain(); osc.type = "triangle"; gain.gain.value = 0; osc.connect(gain).connect(a.destination); osc.start(); }
+    if (on) { osc.frequency.setTargetAtTime(f, a.currentTime, 0.02); gain.gain.setTargetAtTime(vol, a.currentTime, 0.03); }
+    else gain.gain.setTargetAtTime(0, a.currentTime, 0.05);
+  }
+  function play(yRatio, xRatio) {     // 高さ（上ほど高い音）と、左右（音の大きさ）
+    var sc = nsteps === 8 ? SC8 : SC5, nm = nsteps === 8 ? NM8 : NM5;
+    var i = Math.max(0, Math.min(sc.length - 1, Math.floor((1 - yRatio) * sc.length)));
+    voice(true, sc[i], 0.08 + 0.22 * Math.max(0, Math.min(1, xRatio)));
+    return { i: i, name: nm[i], n: sc.length };
+  }
+  function drawBands(cur) {
+    var n = nsteps, nm = nsteps === 8 ? NM8 : NM5, H = hc.height, W = hc.width;
+    for (var k = 0; k < n; k++) {
+      var y0 = H - (k + 1) * H / n;
+      hg.fillStyle = cur && cur.i === k ? "rgba(224,163,46,.45)" : (k % 2 ? "rgba(255,255,255,.06)" : "rgba(255,255,255,.12)");
+      hg.fillRect(0, y0, W, H / n); hg.fillStyle = "rgba(255,255,255,.8)"; hg.font = "bold 20px sans-serif"; hg.textAlign = "left"; hg.fillText(nm[k], 10, y0 + H / n / 2 + 7);
+    }
+  }
+  function drawIdle() { hg.fillStyle = "#111"; hg.fillRect(0, 0, hc.width, hc.height); drawBands(null); }
+  drawIdle();
+  // 指でなぞる（カメラの代わり）
+  hc.addEventListener("pointerdown", function (e) { hc.setPointerCapture(e.pointerId); touchPlay(e); });
+  hc.addEventListener("pointermove", function (e) { if (e.buttons || e.pointerType === "touch") touchPlay(e); });
+  hc.addEventListener("pointerup", function () { if (!running) { voice(false); drawIdle(); } });
+  function touchPlay(e) {
+    if (running) return;
+    var r = hc.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    hg.fillStyle = "#111"; hg.fillRect(0, 0, hc.width, hc.height); var cur = play(y, x); drawBands(cur);
+    hg.fillStyle = "#EE6A5B"; hg.beginPath(); hg.arc(x * hc.width, y * hc.height, 16, 0, 7); hg.fill();
+    $("hmsg").textContent = "いまの音：" + cur.name + "（指の高さ＝座標の数字が、音の高さになる）";
+  }
+  $("hstart").onclick = function () {
+    audio(); $("hmsg").textContent = "手を見つけるAIを読みこんでいます…";
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false }).then(function (s) {
+      hstream = s; hv.srcObject = s; return hv.play();
+    }).then(function () {
+      return import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
+    }).then(function (mp) {
+      return mp.FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm").then(function (fs) {
+        return mp.HandLandmarker.createFromOptions(fs, { baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task" }, runningMode: "VIDEO", numHands: 1 });
+      });
+    }).then(function (h) { lm = h; running = true; $("hmsg").textContent = "手をカメラに映して、上げ下げしてみよう（人さし指の先の高さで音が変わる）"; hloop(); })
+      .catch(function (e) { running = false; $("hmsg").textContent = "カメラかAIが使えませんでした。画面を指でなぞると音が出ます。（" + (e && (e.name || e.message) || e) + "）"; drawIdle(); });
+  };
+  $("hstop").onclick = function () { running = false; voice(false); if (hstream) hstream.getTracks().forEach(function (t) { t.stop(); }); drawIdle(); };
+  function hloop() {
+    if (!running) return;
+    requestAnimationFrame(hloop);
+    var W = hc.width, H = hc.height;
+    hg.save(); hg.translate(W, 0); hg.scale(-1, 1); hg.globalAlpha = 0.55; hg.drawImage(hv, 0, 0, W, H); hg.restore(); hg.globalAlpha = 1;
+    if (hv.currentTime === lastVideoTime) return; lastVideoTime = hv.currentTime;
+    var r = lm.detectForVideo(hv, performance.now()), cur = null;
+    if (r && r.landmarks && r.landmarks[0]) {
+      var p = r.landmarks[0][8]; cur = play(p.y, 1 - p.x);
+      hg.fillStyle = "#EE6A5B"; r.landmarks[0].forEach(function (q) { hg.beginPath(); hg.arc((1 - q.x) * W, q.y * H, 4, 0, 7); hg.fill(); });
+      hg.beginPath(); hg.arc((1 - p.x) * W, p.y * H, 14, 0, 7); hg.fill();
+      $("hmsg").textContent = "いまの音：" + cur.name + "（人さし指の先の高さ＝座標の数字が、音の高さになる）";
+    } else voice(false);
+    drawBands(cur);
+  }
+})();
+</script>
+</body>
+</html>
