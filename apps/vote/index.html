@@ -22,15 +22,31 @@
   .choices button { min-height: 72px; font-size: 22px; }
   .wait { text-align: center; padding: 40px 10px; color: var(--sub); }
   .big-mark { font-size: 54px; }
+  .names { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 10px 0; }
+  .names button { background: #fff; color: var(--ink); border: 2px solid var(--rule); font-size: 14px; min-height: 52px; padding: 6px 2px; white-space: nowrap; letter-spacing: -0.02em; }
+  .mebar { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-weight: 700; }
+  .mebar button { min-height: 36px; padding: 4px 12px; font-size: 14px; }
+  .mebar .pt { margin-left: auto; color: var(--pur); }
+  .judge { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+  .myrank { text-align: center; background: var(--amb-t); border-color: var(--amb); }
+  .myrank .big { font-size: 40px; font-weight: 800; color: var(--pur); }
 </style>
 </head>
 <body>
 <header class="app"><h1>投票アプリ</h1><span class="tag" id="setname"></span></header>
 <main>
+  <div id="mebar" class="mebar hidden"><span id="mename"></span><button class="ghost" id="chg">変える</button><span class="pt" id="mypt"></span></div>
+  <div id="namebox" class="card hidden">
+    <h2>机のカードと同じ どうぶつ をえらぼう</h2>
+    <div id="names" class="names"></div>
+    <p class="muted">名前や学校名は使いません。点数とランキングは、どうぶつの名前で発表します。とちゅうで変えると、点数が分かれるので気をつけてね。</p>
+  </div>
+  <div id="myrank" class="card myrank hidden"></div>
   <div id="wait" class="card wait">
     <div class="big-mark">⏳</div>
     <p>先生が問題を出すまで、少し待ってね。</p>
-    <p class="muted">名前や学校名は送りません。選んだ答えだけを送ります。</p>
+    <p class="muted">先生の画面で問題が出ると、自動で切りかわります。</p>
+    <p class="muted" id="privacy">名前や学校名は送りません。選んだ答えだけを送ります。</p>
   </div>
   <div id="qbox" class="card hidden">
     <div class="q" id="qtext"></div>
@@ -55,10 +71,31 @@
   if (!SET) { $("wait").innerHTML = "<p>問題が見つかりません（set=" + esc(SETID) + "）</p>"; return; }
   $("setname").textContent = SET.title;
   var COLORS = ["sky", "coral", "mint", "amb", "ghost"];
-  var current = null, mine = {};
-  try { mine = JSON.parse(localStorage.getItem("vote_mine_" + SETID) || "{}"); } catch (e) {}
+  var current = null, mine = {}, lastState = null;
+  var SCORED = !!SET.scored, NAMES = SET.names || [];
+  var myName = null, scores = {}, session = "";
+  function lget(k, d) { try { var v = localStorage.getItem(k + SETID); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }
+  function lset(k, v) { try { localStorage.setItem(k + SETID, JSON.stringify(v)); } catch (e) {} }
+  mine = lget("vote_mine_", {}); scores = lget("vote_score_", {}); session = lget("vote_ss_", "");
+  myName = lget("vote_name_", null); if (myName !== null && !NAMES[myName]) myName = null;
+  if (SCORED) $("privacy").textContent = "名前や学校名は送りません。選んだ答えと、どうぶつの名前だけを送ります。";
 
   function findQ(id) { for (var i = 0; i < SET.questions.length; i++) if (SET.questions[i].id === id) return SET.questions[i]; return null; }
+  function pts(q) { return q.points || 1; }
+  function total() { return Object.keys(scores).reduce(function (a, k) { return a + scores[k]; }, 0); }
+
+  // どうぶつの名前（点数制のときだけ）
+  NAMES.forEach(function (n, i) {
+    var b = document.createElement("button"); b.textContent = n;
+    b.onclick = function () { myName = i; lset("vote_name_", i); showMe(); render(lastState); };
+    $("names").appendChild(b);
+  });
+  $("chg").onclick = function () { myName = null; showMe(); render(lastState); };
+  function showMe() {
+    if (!SCORED) return;
+    $("mebar").classList.toggle("hidden", myName === null);
+    if (myName !== null) { $("mename").textContent = NAMES[myName]; $("mypt").textContent = "あなたの点数：" + total() + "点"; }
+  }
 
   function picHTML(src, label, cap) {
     return '<div><div class="pic"><div class="ph">写真' + esc(label) + '<br>（先生が用意した写真が入ります）</div>' +
@@ -66,7 +103,34 @@
       (label ? '<span class="lab">' + esc(label) + '</span>' : '') + '</div>' + (cap ? '<div class="cap">' + esc(cap) + '</div>' : '') + '</div>';
   }
 
+  function showRank(state) {
+    var box = $("myrank");
+    if (!SCORED || !state || !state.rk || myName === null) { box.classList.add("hidden"); return; }
+    var m = null, all = [];
+    String(state.rk).split(",").forEach(function (e) { var a = e.split(":"); if (a.length >= 2) all.push(a); });
+    all.forEach(function (a) {
+      if (+a[0] !== myName) return;
+      if (a.length >= 3) { m = a; return; }                        // 前の形：番号:順位:点数
+      var sc = +a[1], rank = 1 + all.filter(function (b) { return +b[b.length - 1] > sc; }).length;   // 自分より点数が高い人の数＋1
+      m = [a[0], rank, sc];
+    });
+    box.classList.remove("hidden");
+    box.innerHTML = "<div>🏆 " + esc(state.rt || "ランキング") + "</div>" +
+      (m ? '<div class="big">' + esc(m[1]) + "位</div><div>" + esc(NAMES[myName]) + "　" + esc(m[2]) + "点（満点 " + esc(state.mx || "") + "点）</div>"
+         : "<div>まだ点数がありません</div>");
+  }
+
   function render(state) {
+    lastState = state;
+    if (SCORED && state && state.ss && state.ss !== session) {   // 先生が「はじめからやり直す」を押した
+      session = state.ss; lset("vote_ss_", session); mine = {}; scores = {}; lset("vote_mine_", mine); lset("vote_score_", scores); current = null; showMe();
+    }
+    if (SCORED && myName === null) {
+      $("namebox").classList.remove("hidden"); $("wait").classList.add("hidden"); $("qbox").classList.add("hidden"); $("myrank").classList.add("hidden");
+      return;
+    }
+    $("namebox").classList.add("hidden");
+    showRank(state);
     var q = state && findQ(state.q);
     if (!q) { $("wait").classList.remove("hidden"); $("qbox").classList.add("hidden"); current = null; return; }
     $("wait").classList.add("hidden"); $("qbox").classList.remove("hidden");
@@ -86,27 +150,37 @@
       showMine();
     }
     if (state.reveal) {
+      showMine();
+      var judge = "";
+      if (SCORED && q.answer) {
+        var m = mine[tag], got = m === q.answer ? pts(q) : 0;
+        scores[q.id] = got; lset("vote_score_", scores); showMe();
+        judge = '<div class="judge">' + (!m ? "答えていません" : got ? "⭕ 正解！ +" + got + "点" : "❌ ざんねん！") + "</div>";
+      }
       $("reveal").classList.remove("hidden");
-      $("reveal").innerHTML = (q.answer ? "正解は <b>" + esc(q.answer) + "</b>！" : "答えは、先生の話を聞こう。") + (q.hint ? "<br>" + esc(q.hint) : "");
+      $("reveal").innerHTML = judge + (q.answer ? "正解は <b>" + esc(q.answer) + "</b>！" : "答えは、先生の話を聞こう。") + (q.hint ? "<br>" + esc(q.hint) : "");
     } else $("reveal").classList.add("hidden");
   }
 
   function showMine() {
     var m = current && mine[current.tag];
     Array.prototype.forEach.call($("choices").querySelectorAll("button"), function (b) { b.classList.toggle("sel", b.getAttribute("data-c") === m); });
-    if (m) { $("sent").classList.remove("hidden"); $("sent").textContent = "送りました：「" + m + "」（変えるときは、もう一度えらぶ）"; }
+    var done = lastState && lastState.reveal && current && lastState.q === current.id;   // 正解が出たあとは変えられない
+    if (m) { $("sent").className = "ok"; $("sent").textContent = "送りました：「" + m + "」" + (done ? "" : "（変えるときは、もう一度えらぶ）"); }
     else $("sent").classList.add("hidden");
   }
 
   function vote(c) {
     if (!current) return;
+    if (lastState && lastState.reveal && lastState.q === current.id) return;   // 正解が出たあとは変えられない
     var tag = current.tag;
-    mine[tag] = c; try { localStorage.setItem("vote_mine_" + SETID, JSON.stringify(mine)); } catch (e) {}
+    mine[tag] = c; lset("vote_mine_", mine);
     showMine();
-    KozaAPI.put("v_" + SETID + "_" + tag, c).catch(function () {
+    KozaAPI.put("v_" + SETID + "_" + tag, SCORED ? c + "|" + myName : c).catch(function () {
       $("sent").className = "warn"; $("sent").textContent = "送れませんでした。もう一度えらんでください。";
     });
   }
+  showMe();
 
   KozaAPI.poll("vstate_" + SETID, function (rows) {
     var last = rows.length ? KozaAPI.parse(rows[rows.length - 1].value, null) : null;

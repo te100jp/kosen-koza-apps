@@ -27,6 +27,28 @@
   #qlist { font-size: 16px; }
   .manual input { width: 90px; font-size: 22px; text-align: center; }
   .manual .row { margin-bottom: 6px; }
+  .rankview { position: fixed; inset: 0; background: var(--bg); z-index: 30; overflow: auto; padding: 18px 28px; }
+  .rankview h2 { font-size: 40px; margin: 0; }
+  .rankhead { display: flex; align-items: baseline; gap: 18px; margin-bottom: 14px; }
+  .rankhead .muted { font-size: 20px; }
+  .podium { display: grid; grid-template-columns: 1fr 1.15fr 1fr; gap: 16px; align-items: end; margin-bottom: 16px; }
+  .pod { border-radius: 18px; text-align: center; padding: 14px 10px; color: #fff; display: flex; flex-direction: column; justify-content: flex-end; }
+  .pod.r1 { background: var(--amb); height: 310px; } .pod.r2 { background: var(--sky); height: 260px; } .pod.r3 { background: var(--coral); height: 220px; }
+  .pod .medal { font-size: 50px; } .pod .sc { font-size: 24px; }
+  .pod .who { font-size: 32px; font-weight: 800; line-height: 1.25; }
+  .pod .who.m2 { font-size: 26px; } .pod .who.m3 { font-size: 20px; }
+  .pod .who .nm { display: block; white-space: nowrap; } .pod .who.m3 .nm { display: inline-block; margin: 0 6px; }
+  .pod .hide { font-size: 70px; font-weight: 800; opacity: .9; }
+  .rlist { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .rlist div { background: #fff; border: 1px solid var(--rule); border-radius: 10px; padding: 8px 12px; font-size: 20px; display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+  .rlist .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; } .rlist .sc { font-weight: 700; }
+  .rankview.many .pod.r1 { height: 200px; } .rankview.many .pod.r2 { height: 170px; } .rankview.many .pod.r3 { height: 145px; }
+  .rankview.many .pod .medal { font-size: 36px; } .rankview.many .podium { margin-bottom: 10px; }
+  .rankview.many .rlist { grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .rankview.many .rlist div { font-size: 16px; padding: 4px 8px; gap: 4px; }
+  .rlist b { color: var(--pur); margin-right: 6px; }
+  .subctrl { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .subctrl button { font-size: 16px; min-height: 40px; padding: 6px 12px; }
 </style>
 </head>
 <body class="screen">
@@ -58,6 +80,10 @@
         <button class="amb" id="again">この問題をやり直す</button>
         <button class="ghost" id="hand">手で数を入れる</button>
       </div>
+      <div class="subctrl" id="scorectrl">
+        <button class="amb" id="rank">🏆 ランキング</button>
+        <button class="ghost" id="restart">はじめからやり直す（全問）</button>
+      </div>
       <div class="row" style="margin-top:12px">
         <select id="qlist" class="grow"></select>
       </div>
@@ -65,6 +91,18 @@
     </section>
   </div>
 </main>
+<div id="rankview" class="rankview hidden">
+  <div class="rankhead"><h2 id="rtitle">🏆 ランキング</h2><span class="muted" id="rsub"></span></div>
+  <div class="podium" id="podium"></div>
+  <div class="rlist" id="rlist"></div>
+  <p class="warn hidden" id="rwarn"></p>
+  <div class="ctrl">
+    <button class="amb" id="rnext">次の順位を発表 ▶</button>
+    <button class="ghost" id="rall">全部見せる</button>
+    <button class="ghost" id="rre">集計しなおす</button>
+    <button class="ghost" id="rclose">とじる</button>
+  </div>
+</div>
 <script src="../../common/config.js"></script>
 <script src="../../common/api.js"></script>
 <script src="../../common/qrcode.js"></script>
@@ -77,6 +115,11 @@
   var $ = function (id) { return document.getElementById(id); };
   $("setname").textContent = SET.title;
   var Q = SET.questions, idx = -1, state = { q: null, reveal: false, round: 0 }, stopPoll = null, rounds = {}, manualOn = false, manual = {};
+  var SCORED = !!SET.scored, NAMES = SET.names || [], SS = "";
+  if (!SCORED) $("scorectrl").classList.add("hidden");
+  function pts(q) { return q.points || 1; }
+  // 答えは「A」または「A|どうぶつの番号」の形で記録される
+  function parseVote(v) { v = String(v); var k = v.lastIndexOf("|"); return k < 0 ? { c: v, n: null } : { c: v.slice(0, k), n: +v.slice(k + 1) }; }
 
   // 生徒用のURL（このページと同じ設定で index.html を開く）
   var stu = new URL("index.html", location.href);
@@ -99,7 +142,7 @@
     $("pics").innerHTML = imgs.map(function (s, k) { return pic(s, imgs.length > 1 ? q.choices[k] : "", q.texts ? q.texts[k] : ""); }).join("");
     $("texts").innerHTML = (!q.images && q.texts) ? q.texts.map(function (t, k) { return "<div><b>" + esc(q.choices[k]) + "</b>：" + esc(t) + "</div>"; }).join("") : "";
     $("hint").classList.add("hidden");
-    state = { q: q.id, reveal: false, round: rounds[q.id] || 0 };
+    state = { q: q.id, reveal: false, round: rounds[q.id] || 0, ss: SS };
     KozaAPI.put("vstate_" + SETID, state);
     manual = {}; drawBars({});
     if (stopPoll) stopPoll();
@@ -108,7 +151,7 @@
   }
   function tally(rows) {
     var m = KozaAPI.byClient(rows), c = {};
-    Object.keys(m).forEach(function (k) { var v = m[k].value; c[v] = (c[v] || 0) + 1; });
+    Object.keys(m).forEach(function (k) { var v = parseVote(m[k].value).c; c[v] = (c[v] || 0) + 1; });
     return c;
   }
   function drawBars(c) {
@@ -146,10 +189,102 @@
     $("hand").textContent = manualOn ? "自動の集計にもどす" : "手で数を入れる";
     if (manualOn) drawBars(manual);
   };
-  document.addEventListener("keydown", function (e) { if (e.key === "ArrowRight") show(idx + 1); if (e.key === "ArrowLeft") show(idx - 1); });
+
+  // ---------------- ランキング（点数制のとき） ----------------
+  // 先生が出した問題の記録（vstate）から、問題ごとの最後のやり直し回と、正解を見せたかどうかを調べる
+  function history() {
+    return KozaAPI.list("vstate_" + SETID).then(function (rows) {
+      var last = {}, shown = {}, sts = [];
+      rows.forEach(function (r) { var st = KozaAPI.parse(r.value, null); if (st && st.q && (st.ss || "") === SS) sts.push(st); });
+      sts.forEach(function (st) { var rd = st.round || 0; if (last[st.q] === undefined || rd > last[st.q]) last[st.q] = rd; });
+      sts.forEach(function (st) { if (st.reveal && (st.round || 0) === last[st.q]) shown[st.q] = true; });
+      return { last: last, shown: shown };
+    });
+  }
+  function computeRanking() {
+    return history().then(function (h) {
+      var targets = Q.filter(function (q) { return q.answer && h.shown[q.id]; });
+      return Promise.all(targets.map(function (q) {
+        return KozaAPI.list("v_" + SETID + "_" + q.id + "_" + h.last[q.id]).then(function (rows) { return { q: q, rows: rows }; });
+      }));
+    }).then(function (res) {
+      var score = {}, seen = {}, dev = {}, max = 0;
+      res.forEach(function (x) {
+        max += pts(x.q);
+        var last = {};
+        x.rows.forEach(function (r) { var v = parseVote(r.value); if (v.n === null || !NAMES[v.n]) return; last[v.n] = v.c; (dev[v.n] = dev[v.n] || {})[r.client] = 1; });
+        Object.keys(last).forEach(function (n) { seen[n] = 1; if (last[n] === x.q.answer) score[n] = (score[n] || 0) + pts(x.q); });
+      });
+      var list = Object.keys(seen).map(function (n) { return { n: +n, s: score[n] || 0 }; });
+      list.sort(function (a, b) { return b.s - a.s || a.n - b.n; });
+      list.forEach(function (e, i) { e.rank = (i > 0 && list[i - 1].s === e.s) ? list[i - 1].rank : i + 1; });
+      var dup = Object.keys(dev).filter(function (n) { return Object.keys(dev[n]).length > 1; }).map(function (n) { return NAMES[n]; });
+      var fin = res.some(function (x) { return x.q.id.charAt(0) === "r"; });
+      return { list: list, count: res.length, max: max, dup: dup, title: fin ? "最終発表" : "中間発表" };
+    });
+  }
+  var R = null, step = 0;   // step：0＝まだ、1＝3位、2＝2位、3＝1位、4＝全部
+  function drawRank() {
+    if (!R) return;
+    $("rtitle").textContent = "🏆 ランキング　" + R.title;
+    $("rankview").classList.toggle("many", R.list.length > 15);   // 人数が多いときは小さめに並べる
+    $("rsub").textContent = R.count + "問の結果（満点 " + R.max + "点）・" + R.list.length + "人";
+    var MED = { 1: "🥇", 2: "🥈", 3: "🥉" }, OPEN = { 3: 1, 2: 2, 1: 3 };
+    $("podium").innerHTML = [2, 1, 3].map(function (r) {
+      var who = R.list.filter(function (e) { return e.rank === r; });
+      var open = step >= OPEN[r];
+      var body = !who.length ? '<div class="who">—</div>' : open
+        ? '<div class="who' + (who.length > 2 ? " m3" : who.length > 1 ? " m2" : "") + '">' + who.map(function (e) { return '<span class="nm">' + esc(NAMES[e.n]) + "</span>"; }).join("") + '</div><div class="sc">' + who[0].s + "点</div>"
+        : '<div class="hide">？</div>';
+      return '<div class="pod r' + r + '"><div class="medal">' + MED[r] + "</div><div>" + r + "位</div>" + body + "</div>";
+    }).join("");
+    $("rlist").innerHTML = step >= 4 ? R.list.filter(function (e) { return e.rank > 3; }).map(function (e) {
+      return "<div><b>" + e.rank + "位</b><span class=\"nm\">" + esc(NAMES[e.n]) + "</span><span class=\"sc\">" + e.s + "点</span></div>"; }).join("") : "";
+    $("rwarn").classList.toggle("hidden", !R.dup.length);
+    $("rwarn").textContent = R.dup.length ? "同じどうぶつを2台以上で選んでいます：" + R.dup.join("、") + "（あとから送った答えで数えています）" : "";
+    $("rnext").disabled = step >= 4;
+  }
+  function openRank() {
+    $("rankview").classList.remove("hidden"); $("rtitle").textContent = "🏆 集計しています…"; $("rsub").textContent = ""; $("podium").innerHTML = ""; $("rlist").innerHTML = "";
+    computeRanking().then(function (r) { R = r; step = 0; drawRank(); })
+      .catch(function () { $("rtitle").textContent = "集計できませんでした。もう一度「集計しなおす」を押してください"; });
+  }
+  $("rank").onclick = openRank;
+  $("rre").onclick = openRank;
+  $("rnext").onclick = function () { step = Math.min(4, step + 1); drawRank(); };
+  $("rall").onclick = function () { step = 4; drawRank(); };
+  $("rclose").onclick = function () { $("rankview").classList.add("hidden"); };
+  // 講座の前のテストの答えを消して、第1問から始める（先生用の番号が必要）
+  $("restart").onclick = function () {
+    if (!confirm("全部の問題の答えと点数を消して、第1問から始めます。よろしいですか？")) return;
+    var pin = teacherPin(); if (!pin) return;
+    var btn = $("restart"); btn.disabled = true;
+    history().then(function (h) {
+      var keys = [];
+      Q.forEach(function (q) { var m = Math.max(h.last[q.id] || 0, rounds[q.id] || 0); for (var r = 0; r <= m; r++) keys.push("v_" + SETID + "_" + q.id + "_" + r); });
+      var i = 0;
+      function nextKey() {
+        if (i >= keys.length) return Promise.resolve();
+        btn.textContent = "消しています " + (i + 1) + "/" + keys.length;
+        return KozaAPI.reset(keys[i++], pin).then(function (j) { if (!j || !j.ok) throw new Error((j && j.error) || "reset"); return nextKey(); });
+      }
+      return nextKey();
+    }).then(function () {
+      SS = Date.now().toString(36); rounds = {}; show(0);
+      btn.textContent = "消しました ✓（第1問から）";
+    }).catch(function (e) {
+      if (String(e.message).indexOf("pin") >= 0) sessionStorage.removeItem("koza_pin");
+      btn.textContent = "消せませんでした（番号を確かめて、もう一度）";
+    }).then(function () { btn.disabled = false; setTimeout(function () { btn.textContent = "はじめからやり直す（全問）"; }, 4000); });
+  };
+  document.addEventListener("keydown", function (e) {
+    if (!$("rankview").classList.contains("hidden")) { if (e.key === "ArrowRight" || e.key === " ") $("rnext").click(); return; }   // ランキング中は矢印で次の順位
+    if (e.key === "ArrowRight") show(idx + 1); if (e.key === "ArrowLeft") show(idx - 1);
+  });
   // 前回の続きから始める
   KozaAPI.latest("vstate_" + SETID).then(function (r) {
     var st = r && KozaAPI.parse(r.value, null);
+    if (st && st.ss) SS = st.ss;
     if (st && st.q) { for (var i = 0; i < Q.length; i++) if (Q[i].id === st.q) { rounds[st.q] = st.round || 0; show(i); return; } }
     show(0);
   }).catch(function () { show(0); });

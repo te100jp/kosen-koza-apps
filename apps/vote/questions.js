@@ -6,22 +6,31 @@
  *  texts   ：文章クイズの文。ないときは書かない
  *  answer  ：正解（choices の中の1つ）。正解がない問題は null
  *  hint    ：「正解を見せる」で出す説明
+ *  points  ：点数制のときの点数（書かないときは1点）
+ * セットに scored: true と names（どうぶつの名前）を書くと点数制になり、先生の画面でランキングを発表できる。
+ * 生徒は机のカードと同じどうぶつを選んで答える（名前や学校名は使わない）。
  * 写真は風景・動物・食べ物だけにし、人の顔は使わない。
  */
 window.VOTE_SETS = {
   koza2: {
     title: "第2弾 ホンモノはどれだ？",
+    scored: true,
+    names: ["🐼 パンダ", "🐧 ペンギン", "🦁 ライオン", "🐨 コアラ", "🦊 キツネ", "🐬 イルカ", "🐻 クマ", "🐰 ウサギ", "🦒 キリン", "🐯 トラ",
+            "🐸 カエル", "🦉 フクロウ", "🐘 ゾウ", "🐵 サル", "🐶 イヌ", "🐱 ネコ", "🐹 ハムスター", "🐢 カメ", "🐙 タコ", "🦀 カニ",
+            "🐝 ハチ", "🦋 チョウ", "🐳 クジラ", "🦔 ハリネズミ", "🐴 ウマ", "🐮 ウシ", "🐑 ヒツジ", "🐐 ヤギ", "🐔 ニワトリ", "🦆 アヒル",
+            "🦢 ハクチョウ", "🦩 フラミンゴ", "🦜 オウム", "🐤 ヒヨコ", "🦅 ワシ", "🐊 ワニ", "🦎 トカゲ", "🦈 サメ", "🦭 アザラシ", "🦦 カワウソ",
+            "🦫 ビーバー", "🦘 カンガルー", "🦓 シマウマ", "🦏 サイ", "🦛 カバ", "🐿️ リス", "🐞 テントウムシ", "🦥 ナマケモノ", "🐫 ラクダ", "🦙 アルパカ"],
     questions: [
-      { id: "p01", text: "第1問：AIが作った夕焼けはどっち？", choices: ["A", "B"], images: ["img/p01a.jpg", "img/p01b.jpg"], answer: null, hint: "どこを見て決めたかを、1つメモしよう" },
-      { id: "p02", text: "第2問：AIが作った犬の写真はどっち？", choices: ["A", "B"], images: ["img/p02a.jpg", "img/p02b.jpg"], answer: null },
-      { id: "p03", text: "第3問：AIが作ったケーキはどっち？", choices: ["A", "B"], images: ["img/p03a.jpg", "img/p03b.jpg"], answer: null },
-      { id: "p04", text: "第4問：AIが作った森の写真はどっち？", choices: ["A", "B"], images: ["img/p04a.jpg", "img/p04b.jpg"], answer: null },
-      { id: "p05", text: "第5問：AIが作ったねこの写真はどっち？", choices: ["A", "B"], images: ["img/p05a.jpg", "img/p05b.jpg"], answer: null },
-      { id: "p06", text: "第6問：AIが作った海の写真はどっち？", choices: ["A", "B"], images: ["img/p06a.jpg", "img/p06b.jpg"], answer: null },
-      { id: "p07", text: "第7問：AIが作ったラーメンはどっち？", choices: ["A", "B"], images: ["img/p07a.jpg", "img/p07b.jpg"], answer: null },
-      { id: "p08", text: "第8問：AIが作った花の写真はどっち？", choices: ["A", "B"], images: ["img/p08a.jpg", "img/p08b.jpg"], answer: null },
-      { id: "p09", text: "第9問：AIが作った山の写真はどっち？", choices: ["A", "B"], images: ["img/p09a.jpg", "img/p09b.jpg"], answer: null },
-      { id: "p10", text: "第10問：AIが作った町の写真はどっち？", choices: ["A", "B"], images: ["img/p10a.jpg", "img/p10b.jpg"], answer: null },
+      { id: "p01", text: "第1問：AIが作った道の写真はどっち？", choices: ["A", "B"], images: ["img/p01a.jpg", "img/p01b.jpg"], answer: "B", hint: "コツ 1つで決めない：AIも道路の矢印を正しくかけるようになった。1か所だけで決めず、いくつかの手がかりを合わせて考えよう。どこを見て決めたかを、1つメモしよう" },
+      { id: "p02", text: "第2問：AIが作った鯉の写真はどっち？", choices: ["A", "B"], images: ["img/p02a.jpg", "img/p02b.jpg"], answer: "A", hint: "コツ③ 並び方：AIの鯉は、同じ大きさで行儀よく並んでいる。本物は重なり合い、深さもばらばら" },
+      { id: "p03", text: "第3問：AIが作ったかき氷はどっち？", choices: ["A", "B"], images: ["img/p03a.jpg", "img/p03b.jpg"], answer: "B", hint: "コツ① 文字：AIのカップには文字がなく、ふちに何の形でもない赤いにじみがある" },
+      { id: "p04", text: "第4問：AIが作ったわりばしの写真はどっち？", choices: ["A", "B"], images: ["img/p04a.jpg", "img/p04b.jpg"], answer: "A", hint: "コツ② 数と形：本物はすき間なくぎっしりつまっている。AIはすき間だらけで、ばらばらの向きにささっている" },
+      { id: "p05", text: "第5問：AIが作ったヤギの写真はどっち？", choices: ["A", "B"], images: ["img/p05a.jpg", "img/p05b.jpg"], answer: "A", hint: "コツ⑥ 線のつながり：どちらもひとみは横長で、とてもよくできている。AIは右下の金網の線が、途中でゆがんだり曲がったりしている" },
+      { id: "p06", text: "第6問：AIが作ったケーキはどっち？", choices: ["A", "B"], images: ["img/p06a.jpg", "img/p06b.jpg"], answer: "B", hint: "コツ① 文字：本物の札には店の名前がある。AIの札は大きな「Pâtisserie（お菓子屋さん）」だけで、その下の小さな文字は読めない" },
+      { id: "p07", text: "第7問：AIが作った花壇はどっち？", choices: ["A", "B"], images: ["img/p07a.jpg", "img/p07b.jpg"], answer: "A", hint: "コツ③ 並び方：AIの花は、同じ間かくで、もようのように並びすぎている" },
+      { id: "p08", text: "第8問：AIが作った菜の花はどっち？", choices: ["A", "B"], images: ["img/p08a.jpg", "img/p08b.jpg"], answer: "B", hint: "コツ⑤ よごれ・傷：どちらも花びらは4枚。AIは花の形も色もそろいすぎている" },
+      { id: "p09", text: "第9問：AIが作ったリンゴとみかんはどっち？", choices: ["A", "B"], images: ["img/p09a.jpg", "img/p09b.jpg"], answer: "A", hint: "コツ④ 影と光：本物は明かりが2つあり、影が2方向にのびている。AIの影は1方向だけ" },
+      { id: "p10", text: "第10問：AIが作ったサンダルの写真はどっち？", choices: ["A", "B"], images: ["img/p10a.jpg", "img/p10b.jpg"], answer: "B", hint: "コツ⑦ はしと背景：とてもむずかしい問題。ベルトの縫い目や砂利の形を、拡大して見比べよう" },
       { id: "t01", text: "文章クイズ：AIが書いたのはどっち？", choices: ["文A", "文B"],
         texts: ["家族で海に行きました。波が高くて、少しこわかったけど、楽しかったです。", "家族で海に行きました。青い海と白い砂浜が広がり、心に残る一日となりました。"],
         answer: null, hint: "「きれいすぎる」文はAIの文に多いが、決め手にはならない" },
@@ -31,10 +40,12 @@ window.VOTE_SETS = {
         hint: "同じ文でも、人によって予想が分かれる。分かれ方が「確率」" },
       { id: "n03", text: "「愛知県 の 名物 は、」の次に来る言葉は？", choices: ["みそかつ", "手羽先", "ういろう", "その他"], answer: null,
         hint: "みんなが知っていることほど、確率が高くなる" },
-      { id: "r01", text: "もう一度クイズ①：出どころのヒントつき。AIが作ったのはどっち？", choices: ["A", "B"], images: ["img/r01a.jpg", "img/r01b.jpg"],
-        texts: ["出どころ：○○市の観光協会のサイト（撮影者と日付あり）", "出どころ：だれが作ったか書いていないSNSの投稿"], answer: null },
-      { id: "r02", text: "もう一度クイズ②：出どころのヒントつき。AIが作ったのはどっち？", choices: ["A", "B"], images: ["img/r02a.jpg", "img/r02b.jpg"],
-        texts: ["出どころ：ニュースサイト（撮影した記者の名前あり）", "出どころ：「AIで作成」と小さく書かれた画像"], answer: null }
+      { id: "r01", text: "もう一度クイズ①（2点）：出どころのヒントつき。AIが作ったのはどっち？", choices: ["A", "B"], images: ["img/r01a.jpg", "img/r01b.jpg"],
+        texts: ["出どころ：○○市の観光協会のサイト（撮影者と日付あり）", "出どころ：だれが作ったか書いていないSNSの投稿"], answer: "B", points: 2,
+        hint: "コツ⑧ 出どころ：写真だけで迷ったら、出どころを確かめる。だれが、いつ撮ったかが書いてあるほうが信用できる" },
+      { id: "r02", text: "もう一度クイズ②（2点）：出どころのヒントつき。AIが作ったのはどっち？", choices: ["A", "B"], images: ["img/r02a.jpg", "img/r02b.jpg"],
+        texts: ["出どころ：ニュースサイト（撮影した記者の名前あり）", "出どころ：「AIで作成」と小さく書かれた画像"], answer: "B", points: 2,
+        hint: "コツ⑧ 出どころ：プロでも見分けにくい写真。小さな「AIで作成」の文字を見落とさないことが大事" }
     ]
   },
   koza4: {
