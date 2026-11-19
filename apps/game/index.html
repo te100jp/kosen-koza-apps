@@ -20,6 +20,16 @@
   .grid8 { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; font-family: ui-monospace, monospace; font-size: 16px; text-align: center; }
   .grid8 span { background: var(--pur-t); border-radius: 4px; padding: 2px 0; }
   .stages button { font-size: 14px; min-height: 42px; padding: 6px 10px; }
+  /* 選んでいるレベル：網掛け（ななめの線）と太い枠 */
+  .stages button.on { background: repeating-linear-gradient(135deg, rgba(58,36,125,.22) 0 5px, rgba(58,36,125,.06) 5px 10px); border-width: 3px; }
+  /* 傾きセンサーのボタン：2行にして、点滅（ゆっくり明るさと光の輪が変わる）で目立たせる */
+  #perm { flex-direction: column; gap: 2px; line-height: 1.3; animation: permBlink 1.2s ease-in-out infinite; }
+  #perm small { display: block; font-size: .85em; }
+  @keyframes permBlink {
+    0%, 100% { background: var(--sky); box-shadow: 0 0 0 0 rgba(224,163,46,.9); }
+    50% { background: #E0A32E; box-shadow: 0 0 0 10px rgba(224,163,46,0); }
+  }
+  @media (prefers-reduced-motion: reduce) { #perm { animation: none; outline: 4px solid #E0A32E; } }
 </style>
 </head>
 <body>
@@ -31,7 +41,7 @@
   <button data-tab="share">④ 交換</button>
 </nav>
 <main>
-  <button class="big sky" id="perm">傾きセンサーを使う（最初に1回タップ）</button>
+  <button class="big sky" id="perm">傾きセンサーを使う<small>（最初に1回タップ）</small></button>
   <div style="height:8px"></div>
   <canvas id="cv" width="640" height="640"></canvas>
   <div class="hud"><span id="tm">のこり 30.0秒</span><span id="best">ベスト：−</span></div>
@@ -109,11 +119,13 @@
   var $ = function (id) { return document.getElementById(id); };
   var N = 8, cv = $("cv"), g = cv.getContext("2d"), CS = cv.width / N;
   var SAMPLES = [
-    { name: "見本1 やさしい", g: 5, v: 6, t: 30, m: "2000000001111110000000000111111100000000011111100000000000000003" },
-    { name: "見本2 ふつう", g: 5, v: 6, t: 30, m: "2000000011111110000010000110101101000000010111100001001011000113" },
-    { name: "見本3 ワナあり", g: 6, v: 7, t: 25, m: "2000400001110110000000400111011000040000011101104000000001110003" },
-    // 見本4：上級。7つの曲がり角すべての先の通路に「行き止まりのワナ」がある。勢いよく行き過ぎるとワナ。手前でブレーキをかけて曲がる
-    { name: "見本4 むずかしい", g: 6, v: 7, t: 35, m: "2000004111111011140000111101141111000004114111014000000113111141" }
+    { name: "レベル1", g: 5, v: 6, t: 30, m: "2000000001111110000000000111111100000000011111100000000000000003" },
+    // レベル2：曲がり角の先の通路に「行き止まりのワナ」。勢いよく行き過ぎるとワナ。手前でブレーキをかけて曲がる
+    { name: "レベル2", g: 6, v: 7, t: 35, m: "2000004111111011140000111101141111000004114111014000000113111141" },
+    // レベル3：通路の中のワナをよけて進む
+    { name: "レベル3", g: 6, v: 7, t: 25, m: "2000400001110110000000400111011000040000011101104000000001110003" },
+    // レベル4：広い迷路。道がいくつもあり、通路の中のワナをよけながら近道を探す
+    { name: "レベル4", g: 6, v: 7, t: 35, m: "2000400001110110000000400141011000040004010101104000000001114003" }
   ];
   // ---- 効果音（音のファイルは使わず、その場で「ド・ミ・ソ」などの音を作る） ----
   var AC = null, soundOn = true, lastBump = 0;
@@ -152,7 +164,7 @@
 
   // ---- ステージのデータ ----
   function parse(m) { var a = []; for (var i = 0; i < N * N; i++) a.push(+(m[i] || 0)); return a; }
-  function load(s) { stopGame(); stage = { name: s.name, map: parse(s.m) }; rules = { g: s.g, v: s.v, t: s.t }; syncRules(); $("title").textContent = s.name; resetBall(); draw(); bestShow(); }
+  function load(s) { stopGame(); stage = { name: s.name, map: parse(s.m) }; markStage(s.name); rules = { g: s.g, v: s.v, t: s.t }; syncRules(); $("title").textContent = s.name; resetBall(); draw(); bestShow(); }
   function encode(name, map) { return "#s=" + map.join("") + "&g=" + rules.g + "&v=" + rules.v + "&t=" + rules.t + "&n=" + encodeURIComponent(name || "なまえなし"); }
   function fromHash() {
     var h = new URLSearchParams(location.hash.slice(1)); var m = h.get("s");
@@ -160,6 +172,7 @@
     return { name: "友達のステージ：" + (h.get("n") || ""), m: m, g: clamp(+h.get("g"), 0, 10, 5), v: clamp(+h.get("v"), 1, 10, 6), t: clamp(+h.get("t"), 5, 90, 30) };
   }
   function clamp(x, a, b, d) { return isFinite(x) ? Math.max(a, Math.min(b, x)) : d; }
+  function markStage(name) { Array.prototype.forEach.call($("stages").querySelectorAll("button"), function (x) { x.classList.toggle("on", x.textContent === name); }); }
   SAMPLES.forEach(function (s) { var b = document.createElement("button"); b.className = "ghost"; b.textContent = s.name; b.onclick = function () { fromEdit = false; load(s); $("msg").textContent = ""; }; $("stages").appendChild(b); });
 
   // ---- ルール ----
@@ -286,7 +299,7 @@
   $("test").onclick = function () {
     if (editing.indexOf(2) < 0 || editing.indexOf(3) < 0) { $("emsg").className = "warn"; $("emsg").textContent = "スタートとゴールを置いてね。"; return; }
     if (!pathOK(editing)) { $("emsg").className = "warn"; $("emsg").textContent = "スタートからゴールまでの道がありません。かべを直そう。"; return; }
-    stage = { name: $("sname").value || "わたしのステージ", map: editing.slice() }; $("title").textContent = stage.name;
+    stage = { name: $("sname").value || "わたしのステージ", map: editing.slice() }; $("title").textContent = stage.name; markStage("");
     fromEdit = true; tab("play"); startGame();
   };
   $("clear").onclick = function () { editing = new Array(N * N).fill(0); clearedEdit = false; draw(); showData(); };
